@@ -170,6 +170,55 @@ async def estimate_resources(
                 "confidence_level": 0.80,
                 "data_quality_score": 0.85
             }
+        elif request.resource_type == "hybrid":
+            # Combine solar and wind simple estimates for a hybrid system
+            solar = {
+                "annual_generation_gwh": 200.0,
+                "capacity_factor": 0.22,
+                "peak_power_mw": 100.0,
+                "seasonal_variation": {
+                    "summer": 1.2,
+                    "winter": 0.8,
+                    "spring": 1.0,
+                    "fall": 0.9
+                },
+                "uncertainty_range": [180.0, 220.0],
+                "confidence_level": 0.85,
+                "data_quality_score": 0.9
+            }
+            wind = {
+                "annual_generation_gwh": 150.0,
+                "capacity_factor": 0.35,
+                "peak_power_mw": 50.0,
+                "seasonal_variation": {
+                    "summer": 0.9,
+                    "winter": 1.3,
+                    "spring": 1.1,
+                    "fall": 1.0
+                },
+                "uncertainty_range": [130.0, 170.0],
+                "confidence_level": 0.80,
+                "data_quality_score": 0.85
+            }
+
+            estimation_result = {
+                "resource_type": "hybrid",
+                "annual_generation_gwh": solar["annual_generation_gwh"] + wind["annual_generation_gwh"],
+                "capacity_factor": round((solar["capacity_factor"] + wind["capacity_factor"]) / 2, 2),
+                "peak_power_mw": solar["peak_power_mw"] + wind["peak_power_mw"],
+                "seasonal_variation": {
+                    "summer": round((solar["seasonal_variation"]["summer"] + wind["seasonal_variation"]["summer"]) / 2, 2),
+                    "winter": round((solar["seasonal_variation"]["winter"] + wind["seasonal_variation"]["winter"]) / 2, 2),
+                    "spring": round((solar["seasonal_variation"]["spring"] + wind["seasonal_variation"]["spring"]) / 2, 2),
+                    "fall": round((solar["seasonal_variation"]["fall"] + wind["seasonal_variation"]["fall"]) / 2, 2)
+                },
+                "uncertainty_range": [
+                    round(solar["uncertainty_range"][0] + wind["uncertainty_range"][0], 2),
+                    round(solar["uncertainty_range"][1] + wind["uncertainty_range"][1], 2)
+                ],
+                "confidence_level": round((solar["confidence_level"] + wind["confidence_level"]) / 2, 2),
+                "data_quality_score": round((solar["data_quality_score"] + wind["data_quality_score"]) / 2, 2)
+            }
         else:
             raise HTTPException(status_code=400, detail=f"Unsupported resource type: {request.resource_type}")
         
