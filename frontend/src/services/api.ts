@@ -54,10 +54,6 @@ export const apiEndpoints = {
   evaluateCosts: (data: any) =>
     api.post('/cost-evaluation', data),
   
-  // Report Generation
-  generateReport: (data: any) =>
-    api.post('/generate-report', data),
-  
   // Text Analysis
   analyzeText: (data: { text: string; analysis_type?: string }) =>
     api.post('/text-analysis', data),
