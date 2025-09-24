@@ -10,12 +10,6 @@ export function Home() {
       href: '/site-analysis'
     },
     {
-      icon: Globe,
-      title: 'All-in-One',
-      description: 'Run analysis, estimation, costs and report together',
-      href: '/all'
-    },
-    {
       icon: Zap,
       title: 'Resource Estimation',
       description: 'Comprehensive evaluation of solar, wind, and hydro resources',
