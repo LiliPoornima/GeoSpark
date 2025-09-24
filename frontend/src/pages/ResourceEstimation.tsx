@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { MapPin, Zap, Sun, Wind, Battery, Search, Map, BarChart3, TrendingUp, Calendar, Gauge, DollarSign, FileText, Download } from 'lucide-react'
+import { MapPin, Zap, Sun, Wind, Battery, Search, Map, BarChart3, TrendingUp, Calendar, Gauge } from 'lucide-react'
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
 import L from 'leaflet'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts'
@@ -44,9 +44,6 @@ interface SystemConfig {
   wind_turbine_rating: number
   system_losses: number
   availability_factor: number
-  tilt_angle?: number
-  inverter_efficiency?: number
-  turbine_hub_height?: number
 }
 
 export function ResourceEstimation() {
@@ -60,10 +57,7 @@ export function ResourceEstimation() {
     panel_efficiency: 20,
     wind_turbine_rating: 3.0,
     system_losses: 15,
-    availability_factor: 95,
-    tilt_angle: 25,
-    inverter_efficiency: 96,
-    turbine_hub_height: 100
+    availability_factor: 95
   })
   const [citySearch, setCitySearch] = useState('')
   const [citySuggestions, setCitySuggestions] = useState<CitySuggestion[]>([])
@@ -72,8 +66,6 @@ export function ResourceEstimation() {
   const [result, setResult] = useState<ResourceEstimationResult | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isSearchingCity, setIsSearchingCity] = useState(false)
-  const [costResult, setCostResult] = useState<any>(null)
-  const [reportText, setReportText] = useState<string>("")
 
   // Geocoding function using OpenStreetMap Nominatim API
   const searchCities = async (query: string) => {
@@ -115,7 +107,7 @@ export function ResourceEstimation() {
   }
 
   // Handle city selection
-  const selectCity = async (city: CitySuggestion) => {
+  const selectCity = (city: CitySuggestion) => {
     setSelectedCity(city)
     setCitySearch(`${city.name}, ${city.state || city.country}`)
     setFormData({
@@ -126,39 +118,6 @@ export function ResourceEstimation() {
     setShowSuggestions(false)
     setCitySuggestions([])
     toast.success(`Selected ${city.name}`)
-
-    // Auto-run: resource estimation -> cost evaluation -> report generation
-    try {
-      setIsLoading(true)
-      // 1) Resource estimation using current resource_type and defaults
-      const estimationResp = await apiEndpoints.estimateResources({
-        location: { latitude: city.lat, longitude: city.lon, area_km2: parseFloat(formData.area_km2) || 100 },
-        resource_type: formData.resource_type,
-        system_config: systemConfig
-      })
-      const estimation = estimationResp.data.estimation
-      setResult(estimation)
-
-      // 2) Cost evaluation using estimation outputs
-      const project_type = formData.resource_type
-      const capacity_mw = estimation.peak_power_mw || 100
-      const annual_generation_gwh = estimation.annual_generation_gwh || 200
-      const costResp = await apiEndpoints.evaluateCosts({
-        project_data: { project_type, capacity_mw, annual_generation_gwh },
-        financial_params: { electricity_price_usd_mwh: 50, project_lifetime: 25, discount_rate: 0.08 }
-      })
-      setCostResult(costResp.data.evaluation)
-
-      // 3) Report generation
-      const reportResp = await apiEndpoints.generateReport({
-        project_data: { project_type, capacity_mw, location: { latitude: city.lat, longitude: city.lon } }
-      })
-      setReportText(reportResp.data.report)
-    } catch (err) {
-      toast.error('Auto-generation failed. Try manual estimate.')
-    } finally {
-      setIsLoading(false)
-    }
   }
 
   // Handle form submission
@@ -370,16 +329,6 @@ export function ResourceEstimation() {
                     value={systemConfig.panel_efficiency}
                     onChange={handleSystemConfigChange}
                   />
-                  <div className="mt-4 grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Tilt Angle (deg)</label>
-                      <input type="number" name="tilt_angle" step="1" value={systemConfig.tilt_angle || 0} onChange={handleSystemConfigChange} className="w-full px-3 py-2 border border-gray-300 rounded-md" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Inverter Efficiency (%)</label>
-                      <input type="number" name="inverter_efficiency" step="0.1" value={systemConfig.inverter_efficiency || 0} onChange={handleSystemConfigChange} className="w-full px-3 py-2 border border-gray-300 rounded-md" />
-                    </div>
-                  </div>
                 </div>
               )}
               
@@ -397,10 +346,6 @@ export function ResourceEstimation() {
                     value={systemConfig.wind_turbine_rating}
                     onChange={handleSystemConfigChange}
                   />
-                  <div className="mt-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Hub Height (m)</label>
-                    <input type="number" name="turbine_hub_height" step="1" value={systemConfig.turbine_hub_height || 0} onChange={handleSystemConfigChange} className="w-full px-3 py-2 border border-gray-300 rounded-md" />
-                  </div>
                 </div>
               )}
 
@@ -591,66 +536,6 @@ export function ResourceEstimation() {
                 <p>Enter location details to estimate renewable energy resources</p>
               </div>
             )}
-          </div>
-
-          {/* Cost Summary */}
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-lg font-semibold mb-4 flex items-center"><DollarSign className="h-5 w-5 mr-2"/>Cost Summary</h2>
-            {costResult ? (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="p-4 bg-green-50 rounded">
-                  <div className="text-sm text-gray-600">Total CAPEX</div>
-                  <div className="text-xl font-semibold">{costResult.total_capex_usd.toLocaleString()}</div>
-                </div>
-                <div className="p-4 bg-blue-50 rounded">
-                  <div className="text-sm text-gray-600">Annual OPEX</div>
-                  <div className="text-xl font-semibold">{costResult.annual_opex_usd.toLocaleString()}</div>
-                </div>
-                <div className="p-4 bg-purple-50 rounded">
-                  <div className="text-sm text-gray-600">NPV</div>
-                  <div className="text-xl font-semibold">{costResult.financial_metrics.net_present_value_usd.toFixed(0)}</div>
-                </div>
-                <div className="p-4 bg-yellow-50 rounded">
-                  <div className="text-sm text-gray-600">ROI</div>
-                  <div className="text-xl font-semibold">{(costResult.financial_metrics.return_on_investment * 100).toFixed(1)}%</div>
-                </div>
-                <div className="p-4 bg-indigo-50 rounded">
-                  <div className="text-sm text-gray-600">LCOE</div>
-                  <div className="text-xl font-semibold">${'{'}(costResult.financial_metrics.levelized_cost_of_energy_usd_mwh || 0).toFixed(2){'}'}/MWh</div>
-                </div>
-                <div className="p-4 bg-rose-50 rounded">
-                  <div className="text-sm text-gray-600">Payback</div>
-                  <div className="text-xl font-semibold">{costResult.financial_metrics.payback_period_years ? costResult.financial_metrics.payback_period_years.toFixed(1) : 'N/A'} yrs</div>
-                </div>
-              </div>
-            ) : (
-              <div className="text-gray-500">Select a city to auto-generate costs.</div>
-            )}
-          </div>
-
-          {/* Report Preview */}
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-lg font-semibold mb-4 flex items-center"><FileText className="h-5 w-5 mr-2"/>Report</h2>
-            <div className="flex items-center justify-between mb-3">
-              <div className="text-sm text-gray-600">Auto-generated project report</div>
-              <button
-                onClick={() => {
-                  if (!reportText) return
-                  const blob = new Blob([reportText], { type: 'text/plain;charset=utf-8' })
-                  const url = URL.createObjectURL(blob)
-                  const a = document.createElement('a')
-                  a.href = url
-                  a.download = 'geospark_report.txt'
-                  a.click()
-                  URL.revokeObjectURL(url)
-                }}
-                disabled={!reportText}
-                className="flex items-center bg-gray-800 text-white px-3 py-2 rounded-md disabled:opacity-50"
-              >
-                <Download className="h-4 w-4 mr-1"/>Download
-              </button>
-            </div>
-            <pre className="whitespace-pre-wrap text-sm text-gray-800 bg-gray-50 p-4 rounded min-h-[120px]">{reportText || 'Select a city to generate a report.'}</pre>
           </div>
         </div>
       </div>
