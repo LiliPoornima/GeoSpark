@@ -1,7 +1,18 @@
-import React, { useState } from 'react'
-import { MapPin, Zap, DollarSign, BarChart3, TrendingUp, AlertTriangle } from 'lucide-react'
+import React, { useState, useEffect } from 'react'
+import { MapPin, Zap, DollarSign, BarChart3, TrendingUp, AlertTriangle, Search, Map } from 'lucide-react'
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
+import L from 'leaflet'
 import { apiEndpoints } from '../services/api'
 import toast from 'react-hot-toast'
+import 'leaflet/dist/leaflet.css'
+
+// Fix for default markers in react-leaflet
+delete (L.Icon.Default.prototype as any)._getIconUrl
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+})
 
 interface SiteAnalysisResult {
   site_id: string
@@ -30,6 +41,14 @@ interface SiteAnalysisResult {
   estimated_capacity_mw: number
 }
 
+interface CitySuggestion {
+  name: string
+  country: string
+  lat: number
+  lon: number
+  state?: string
+}
+
 export function SiteAnalysis() {
   const [formData, setFormData] = useState({
     latitude: '',
@@ -37,9 +56,68 @@ export function SiteAnalysis() {
     area_km2: '100',
     project_type: 'solar'
   })
+  const [citySearch, setCitySearch] = useState('')
+  const [citySuggestions, setCitySuggestions] = useState<CitySuggestion[]>([])
+  const [selectedCity, setSelectedCity] = useState<CitySuggestion | null>(null)
+  const [showSuggestions, setShowSuggestions] = useState(false)
   const [result, setResult] = useState<SiteAnalysisResult | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [isSearchingCity, setIsSearchingCity] = useState(false)
 
+  // Geocoding function using OpenStreetMap Nominatim API
+  const searchCities = async (query: string) => {
+    if (query.length < 3) {
+      setCitySuggestions([])
+      return
+    }
+
+    setIsSearchingCity(true)
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&addressdetails=1`
+      )
+      const data = await response.json()
+      
+      const suggestions: CitySuggestion[] = data.map((item: any) => ({
+        name: item.display_name.split(',')[0],
+        country: item.address?.country || '',
+        state: item.address?.state || '',
+        lat: parseFloat(item.lat),
+        lon: parseFloat(item.lon)
+      }))
+      
+      setCitySuggestions(suggestions)
+    } catch (error) {
+      console.error('Error searching cities:', error)
+      toast.error('Failed to search cities')
+    } finally {
+      setIsSearchingCity(false)
+    }
+  }
+
+  // Handle city search input
+  const handleCitySearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value
+    setCitySearch(value)
+    searchCities(value)
+    setShowSuggestions(true)
+  }
+
+  // Handle city selection
+  const selectCity = (city: CitySuggestion) => {
+    setSelectedCity(city)
+    setCitySearch(`${city.name}, ${city.state || city.country}`)
+    setFormData({
+      ...formData,
+      latitude: city.lat.toString(),
+      longitude: city.lon.toString()
+    })
+    setShowSuggestions(false)
+    setCitySuggestions([])
+    toast.success(`Selected ${city.name}`)
+  }
+
+  // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
@@ -71,6 +149,15 @@ export function SiteAnalysis() {
     })
   }
 
+  // Close suggestions when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setShowSuggestions(false)
+    }
+    document.addEventListener('click', handleClickOutside)
+    return () => document.removeEventListener('click', handleClickOutside)
+  }, [])
+
   return (
     <div className="space-y-6">
       <div>
@@ -83,36 +170,78 @@ export function SiteAnalysis() {
         <div className="bg-white rounded-lg shadow p-6">
           <h2 className="text-lg font-semibold mb-4">Analysis Parameters</h2>
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
+            {/* City Search */}
+            <div className="relative">
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Latitude
+                Search City
               </label>
-              <input
-                type="number"
-                name="latitude"
-                step="any"
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-                placeholder="40.7128"
-                value={formData.latitude}
-                onChange={handleInputChange}
-              />
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <input
+                  type="text"
+                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                  placeholder="Search for a city..."
+                  value={citySearch}
+                  onChange={handleCitySearch}
+                />
+                {isSearchingCity && (
+                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600"></div>
+                  </div>
+                )}
+              </div>
+              
+              {/* City Suggestions Dropdown */}
+              {showSuggestions && citySuggestions.length > 0 && (
+                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                  {citySuggestions.map((city, index) => (
+                    <div
+                      key={index}
+                      className="px-4 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
+                      onClick={() => selectCity(city)}
+                    >
+                      <div className="font-medium text-gray-900">{city.name}</div>
+                      <div className="text-sm text-gray-500">
+                        {city.state && `${city.state}, `}{city.country}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Longitude
-              </label>
-              <input
-                type="number"
-                name="longitude"
-                step="any"
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-                placeholder="-74.0060"
-                value={formData.longitude}
-                onChange={handleInputChange}
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Latitude
+                </label>
+                <input
+                  type="number"
+                  name="latitude"
+                  step="any"
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                  placeholder="40.7128"
+                  value={formData.latitude}
+                  onChange={handleInputChange}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Longitude
+                </label>
+                <input
+                  type="number"
+                  name="longitude"
+                  step="any"
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                  placeholder="-74.0060"
+                  value={formData.longitude}
+                  onChange={handleInputChange}
+                />
+              </div>
             </div>
 
             <div>
@@ -156,9 +285,53 @@ export function SiteAnalysis() {
           </form>
         </div>
 
-        {/* Results */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold mb-4">Analysis Results</h2>
+        {/* Map and Results */}
+        <div className="space-y-6">
+          {/* Map */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <h2 className="text-lg font-semibold mb-4 flex items-center">
+              <Map className="h-5 w-5 mr-2" />
+              Location Map
+            </h2>
+            {formData.latitude && formData.longitude ? (
+              <div className="h-64 rounded-lg overflow-hidden">
+                <MapContainer
+                  center={[parseFloat(formData.latitude), parseFloat(formData.longitude)]}
+                  zoom={10}
+                  style={{ height: '100%', width: '100%' }}
+                >
+                  <TileLayer
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                  />
+                  <Marker position={[parseFloat(formData.latitude), parseFloat(formData.longitude)]}>
+                    <Popup>
+                      <div className="text-center">
+                        <div className="font-semibold">Analysis Site</div>
+                        <div className="text-sm text-gray-600">
+                          {selectedCity ? `${selectedCity.name}` : 'Custom Location'}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {formData.latitude}, {formData.longitude}
+                        </div>
+                      </div>
+                    </Popup>
+                  </Marker>
+                </MapContainer>
+              </div>
+            ) : (
+              <div className="h-64 bg-gray-100 rounded-lg flex items-center justify-center">
+                <div className="text-center text-gray-500">
+                  <MapPin className="h-12 w-12 mx-auto mb-2 text-gray-300" />
+                  <p>Enter coordinates or search for a city to view the map</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Results */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <h2 className="text-lg font-semibold mb-4">Analysis Results</h2>
           
           {result ? (
             <div className="space-y-4">
@@ -262,6 +435,7 @@ export function SiteAnalysis() {
               <p>Enter location details to analyze renewable energy potential</p>
             </div>
           )}
+          </div>
         </div>
       </div>
     </div>
