@@ -7,7 +7,6 @@ import { SiteAnalysis } from './pages/SiteAnalysis'
 import { ResourceEstimation } from './pages/ResourceEstimation'
 import { CostEvaluation } from './pages/CostEvaluation'
 import { Reports } from './pages/Reports'
-import { AllInOne } from './pages/AllInOne'
 import { Login } from './pages/Login'
 import { Dashboard } from './pages/Dashboard'
 
@@ -23,7 +22,6 @@ function App() {
           <Route path="resource-estimation" element={<ResourceEstimation />} />
           <Route path="cost-evaluation" element={<CostEvaluation />} />
           <Route path="reports" element={<Reports />} />
-          <Route path="all" element={<AllInOne />} />
         </Route>
       </Routes>
     </AuthProvider>

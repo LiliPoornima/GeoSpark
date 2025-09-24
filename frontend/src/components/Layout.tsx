@@ -19,7 +19,10 @@ export function Layout() {
   const navigation = [
     { name: 'Home', href: '/', icon: Home },
     { name: 'Dashboard', href: '/dashboard', icon: BarChart3 },
+    { name: 'Site Analysis', href: '/site-analysis', icon: MapPin },
     { name: 'Resource Estimation', href: '/resource-estimation', icon: Zap },
+    { name: 'Cost Evaluation', href: '/cost-evaluation', icon: DollarSign },
+    { name: 'Reports', href: '/reports', icon: FileText },
   ]
 
   return (
