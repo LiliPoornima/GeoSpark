@@ -7,7 +7,7 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
 from fastapi.security import HTTPBearer
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field ,EmailStr
 import asyncio
 
 from app.core.security import get_current_user, security_manager
@@ -510,3 +510,34 @@ async def clear_cache(current_user: Dict[str, Any] = Depends(get_current_user)):
     except Exception as e:
         logger.error(f"Error clearing cache: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+    
+    from pydantic import BaseModel, EmailStr
+from fastapi import status
+
+# For demo, simple in-memory store
+USERS_DB = {}
+
+class RegisterRequest(BaseModel):
+    username: str
+    email: EmailStr
+    password: str
+
+@router.post("/register", status_code=status.HTTP_201_CREATED)
+async def register_user(request: RegisterRequest):
+    if request.username in USERS_DB:
+        raise HTTPException(status_code=400, detail="Username already exists")
+    
+    # Save user in the in-memory DB (replace with real DB logic)
+    USERS_DB[request.username] = {
+        "username": request.username,
+        "email": request.email,
+        "password": request.password,  # For production: hash this!
+    }
+    return {
+        "success": True,
+        "message": "User registered successfully",
+        "user": {
+            "username": request.username,
+            "email": request.email
+        }
+    }

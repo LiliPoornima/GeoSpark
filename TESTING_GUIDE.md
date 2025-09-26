@@ -533,4 +533,3 @@ curl http://localhost:8000/api/v1/data-statistics
 - [ ] Logging is working
 - [ ] Monitoring dashboards show data
 
-This testing guide provides comprehensive coverage for testing the GeoSpark platform at all levels. Use the appropriate testing methods based on your development stage and requirements.

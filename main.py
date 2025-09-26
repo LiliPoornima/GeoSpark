@@ -7,15 +7,20 @@ Run this with: python main.py
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel,EmailStr
 from typing import Dict, Any, List
 import json
 import asyncio
 from datetime import datetime
 import uuid
+import bcrypt
+
 
 # Import the demo functionality
 from demo import GeoSparkDemo
+
+# In-memory user DB
+USERS_DB: Dict[str, Dict] = {}
 
 app = FastAPI(
     title="GeoSpark Demo API",
@@ -34,6 +39,17 @@ app.add_middleware(
 
 # Initialize demo
 demo = GeoSparkDemo()
+
+# Pydantic models
+class RegisterRequest(BaseModel):
+    username: str
+    email: EmailStr
+    password: str
+
+class AuthenticationRequest(BaseModel):
+    username: str
+    password: str
+
 
 # Pydantic models
 class Location(BaseModel):
@@ -138,38 +154,46 @@ async def get_data_statistics():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/api/v1/authenticate")
-async def authenticate(credentials: Dict[str, str]):
-    """Mock authentication for demo"""
-    username = credentials.get("username", "")
-    password = credentials.get("password", "")
+# Register endpoint
+@app.post("/api/v1/register")
+async def register_user(request: RegisterRequest):
+    if request.username in USERS_DB:
+        raise HTTPException(status_code=400, detail="Username already exists")
     
-    # Demo credentials
-    if username == "demo" and password == "demo123":
-        return {
-            "success": True,
-            "token": "demo_token_" + str(uuid.uuid4()),
-            "user": {
-                "id": "1",
-                "username": username,
-                "email": f"{username}@geospark.com",
-                "role": "user"
-            }
-        }
-    else:
+    # Hash password
+    hashed_pw = bcrypt.hashpw(request.password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    
+    USERS_DB[request.username] = {
+        "username": request.username,
+        "email": request.email,
+        "password": hashed_pw
+    }
+    return {"success": True, "message": "User registered successfully"}
+
+# Authenticate endpoint
+@app.post("/api/v1/authenticate")
+async def authenticate_user(request: AuthenticationRequest):
+    user = USERS_DB.get(request.username)
+    if not user:
         raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    # Verify password
+    if not bcrypt.checkpw(request.password.encode('utf-8'), user["password"].encode('utf-8')):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    # Generate token
+    token = str(uuid.uuid4())
+    
+    return {
+        "success": True,
+        "token": token,
+        "user": {
+            "id": "1",  # Demo ID
+            "username": user["username"],
+            "email": user["email"],
+            "role": "user"
+        }
+    }
 
 if __name__ == "__main__":
-    print("🚀 Starting GeoSpark Demo API...")
-    print("=" * 40)
-    print("API Documentation: http://localhost:8000/docs")
-    print("Health Check: http://localhost:8000/health")
-    print("=" * 40)
-    
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
-        log_level="info"
-    )
+    uvicorn.run(app, host="0.0.0.0", port=8000)
