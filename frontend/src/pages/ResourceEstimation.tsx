@@ -501,7 +501,13 @@ export function ResourceEstimation() {
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="name" />
                         <YAxis />
-                        <Tooltip formatter={(value) => [`${value.toFixed(1)} GWh`, 'Generation']} />
+                        <Tooltip 
+  formatter={(value) => [
+    value ? Number(value).toFixed(1) + ' GWh' : '0 GWh', 
+    'Generation'
+  ]} 
+/>
+
                         <Bar dataKey="generation" fill="#10B981" />
                       </BarChart>
                     </ResponsiveContainer>

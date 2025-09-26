@@ -7,19 +7,21 @@ Run this with: python main.py
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import Dict, Any, List, Optional
+from pydantic import BaseModel,EmailStr
+from typing import Dict, Any, List
 import json
 import asyncio
 from datetime import datetime
 import uuid
-import logging
+import bcrypt
 
-# Set up logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
-# Create FastAPI app first
+# Import the demo functionality
+from demo import GeoSparkDemo
+
+# In-memory user DB
+USERS_DB: Dict[str, Dict] = {}
+
 app = FastAPI(
     title="GeoSpark Demo API",
     description="AI-powered renewable energy analysis platform - Demo Version",
@@ -34,6 +36,20 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Initialize demo
+demo = GeoSparkDemo()
+
+# Pydantic models
+class RegisterRequest(BaseModel):
+    username: str
+    email: EmailStr
+    password: str
+
+class AuthenticationRequest(BaseModel):
+    username: str
+    password: str
+
 
 # Pydantic models
 class Location(BaseModel):
@@ -54,153 +70,26 @@ class DataSearchRequest(BaseModel):
     query: str
     limit: int = 5
 
-class SiteAnalysisResult(BaseModel):
-    site_id: str
-    location: Dict[str, Any]
-    overall_score: float
-    solar_potential: float
-    wind_potential: float
-    environmental_score: float
-    regulatory_score: float
-    accessibility_score: float
-    recommendations: List[str]
-    risks: List[str]
-    estimated_capacity_mw: float
-    analysis_timestamp: datetime
+# Resource Estimation models
+class ResourceLocation(BaseModel):
+    latitude: float
+    longitude: float
+    area_km2: float = 100
 
-# Demo GeoSpark class (inline implementation)
-class GeoSparkDemo:
-    def __init__(self):
-        logger.info("Initializing GeoSpark Demo...")
-        self.system_status = {
-            "status": "operational",
-            "last_updated": datetime.now(),
-            "version": "1.0.0-demo"
-        }
-        
-    async def analyze_site(self, request: SiteAnalysisRequest) -> SiteAnalysisResult:
-        """Mock site analysis for demo purposes"""
-        # Simulate processing time
-        await asyncio.sleep(0.5)
-        
-        # Generate mock data based on location
-        lat = request.location.latitude
-        lon = request.location.longitude
-        
-        # Simple scoring based on latitude (closer to equator = better solar)
-        solar_potential = max(0.1, 1.0 - abs(lat) / 90.0)
-        wind_potential = 0.3 + (abs(lat) / 90.0) * 0.7  # Higher latitudes = better wind
-        
-        result = SiteAnalysisResult(
-            site_id=f"site_{uuid.uuid4().hex[:8]}",
-            location=request.location.dict(),
-            overall_score=round((solar_potential + wind_potential) / 2, 2),
-            solar_potential=round(solar_potential, 2),
-            wind_potential=round(wind_potential, 2),
-            environmental_score=0.8,
-            regulatory_score=0.7,
-            accessibility_score=0.6,
-            recommendations=[
-                f"Optimal for {request.project_type} energy generation",
-                "Consider environmental impact assessment",
-                "Verify local regulations and permits"
-            ],
-            risks=[
-                "Weather variability",
-                "Regulatory changes",
-                "Grid connection challenges"
-            ],
-            estimated_capacity_mw=round(request.location.area_km2 * 0.5, 2),
-            analysis_timestamp=datetime.now()
-        )
-        
-        return result
-    
-    async def analyze_text(self, text: str, analysis_type: str) -> Dict[str, Any]:
-        """Mock text analysis"""
-        await asyncio.sleep(0.3)
-        
-        # Simple text analysis
-        word_count = len(text.split())
-        char_count = len(text)
-        
-        # Mock sentiment (based on common positive/negative words)
-        positive_words = ["good", "excellent", "great", "positive", "efficient", "sustainable"]
-        negative_words = ["bad", "poor", "terrible", "negative", "inefficient", "problematic"]
-        
-        text_lower = text.lower()
-        positive_score = sum(1 for word in positive_words if word in text_lower)
-        negative_score = sum(1 for word in negative_words if word in text_lower)
-        
-        sentiment = "neutral"
-        if positive_score > negative_score:
-            sentiment = "positive"
-        elif negative_score > positive_score:
-            sentiment = "negative"
-        
-        return {
-            "word_count": word_count,
-            "character_count": char_count,
-            "sentiment": sentiment,
-            "positive_indicators": positive_score,
-            "negative_indicators": negative_score,
-            "analysis_type": analysis_type,
-            "processed_at": datetime.now().isoformat()
-        }
-    
-    async def search_data(self, query: str) -> List[Dict[str, Any]]:
-        """Mock data search"""
-        await asyncio.sleep(0.2)
-        
-        # Mock search results
-        mock_results = [
-            {
-                "id": f"result_{i}",
-                "title": f"Renewable Energy Dataset {i}",
-                "description": f"Data related to {query} - Sample dataset {i}",
-                "relevance_score": round(1.0 - (i * 0.1), 2),
-                "last_updated": datetime.now().isoformat(),
-                "source": f"geospark_db_{i}"
-            }
-            for i in range(1, 6)
-        ]
-        
-        return mock_results
-    
-    def get_system_status(self) -> Dict[str, Any]:
-        """Get current system status"""
-        return {
-            "status": "operational",
-            "uptime": "99.9%",
-            "last_updated": datetime.now().isoformat(),
-            "version": "1.0.0-demo",
-            "active_analyses": 0,
-            "total_sites_analyzed": 1247,
-            "data_sources_online": 12
-        }
-    
-    def get_data_statistics(self) -> Dict[str, Any]:
-        """Get data statistics"""
-        return {
-            "total_datasets": 156,
-            "total_sites": 1247,
-            "countries_covered": 89,
-            "last_data_update": datetime.now().isoformat(),
-            "data_quality_score": 0.94,
-            "storage_used_gb": 2.4
-        }
+class ResourceEstimationRequest(BaseModel):
+    location: ResourceLocation
+    resource_type: str = "solar"
+    system_config: Dict[str, Any] = {}
 
-# Initialize demo instance
-demo = GeoSparkDemo()
+class CostEvaluationRequest(BaseModel):
+    project_data: Dict[str, Any]
+    financial_params: Dict[str, Any] = {}
 
-# Try to import additional routes if they exist
-try:
-    from app.api import routes
-    app.include_router(routes.router, prefix="/api/v1")
-    logger.info("Successfully loaded additional routes")
-except ImportError as e:
-    logger.warning(f"Could not load additional routes: {e}")
-    logger.info("Continuing with basic routes only")
+class AgentChatRequest(BaseModel):
+    message: str
+    city: str | None = None
+    resource_type: str | None = None
+    mode: str | None = None  # 'workflow' or 'chat'
 
 # API Routes
 @app.get("/")
@@ -209,16 +98,7 @@ async def root():
         "message": "Welcome to GeoSpark Demo API",
         "version": "1.0.0",
         "status": "operational",
-        "docs": "/docs",
-        "endpoints": {
-            "health": "/health",
-            "site_analysis": "/api/v1/site-analysis",
-            "text_analysis": "/api/v1/text-analysis",
-            "data_search": "/api/v1/data-search",
-            "system_status": "/api/v1/system-status",
-            "data_statistics": "/api/v1/data-statistics",
-            "authenticate": "/api/v1/authenticate"
-        }
+        "docs": "/docs"
     }
 
 @app.get("/health")
@@ -229,8 +109,15 @@ async def health_check():
 async def analyze_site(request: SiteAnalysisRequest):
     """Analyze a site for renewable energy potential"""
     try:
-        logger.info(f"Analyzing site at {request.location.latitude}, {request.location.longitude}")
-        result = await demo.analyze_site(request)
+        from demo import SiteAnalysisRequest as DemoRequest
+        
+        demo_request = DemoRequest(
+            location=request.location.dict(),
+            project_type=request.project_type,
+            analysis_depth=request.analysis_depth
+        )
+        
+        result = await demo.analyze_site(demo_request)
         
         return {
             "success": True,
@@ -250,30 +137,203 @@ async def analyze_site(request: SiteAnalysisRequest):
             }
         }
     except Exception as e:
-        logger.error(f"Error analyzing site: {e}")
-        raise HTTPException(status_code=500, detail=f"Site analysis failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/v1/text-analysis")
 async def analyze_text(request: TextAnalysisRequest):
     """Analyze text using NLP"""
     try:
-        logger.info(f"Analyzing text of length {len(request.text)}")
         result = await demo.analyze_text(request.text, request.analysis_type)
         return {"success": True, "analysis": result}
     except Exception as e:
-        logger.error(f"Error analyzing text: {e}")
-        raise HTTPException(status_code=500, detail=f"Text analysis failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/v1/data-search")
 async def search_data(request: DataSearchRequest):
     """Search renewable energy data"""
     try:
-        logger.info(f"Searching data for: {request.query}")
         result = await demo.search_data(request.query)
-        return {"success": True, "results": result[:request.limit]}
+        return {"success": True, "results": result}
     except Exception as e:
-        logger.error(f"Error searching data: {e}")
-        raise HTTPException(status_code=500, detail=f"Data search failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/resource-estimation")
+async def estimate_resources(request: ResourceEstimationRequest):
+    """Simplified resource estimation for demo (solar/wind/hybrid)."""
+    rt = request.resource_type
+    if rt == "solar":
+        estimation = {
+            "resource_type": "solar",
+            "annual_generation_gwh": 200.0,
+            "capacity_factor": 0.22,
+            "peak_power_mw": 100.0,
+            "seasonal_variation": {"summer": 1.2, "winter": 0.8, "spring": 1.0, "fall": 0.9},
+            "uncertainty_range": [180.0, 220.0],
+            "confidence_level": 0.85,
+            "data_quality_score": 0.9,
+        }
+    elif rt == "wind":
+        estimation = {
+            "resource_type": "wind",
+            "annual_generation_gwh": 150.0,
+            "capacity_factor": 0.35,
+            "peak_power_mw": 50.0,
+            "seasonal_variation": {"summer": 0.9, "winter": 1.3, "spring": 1.1, "fall": 1.0},
+            "uncertainty_range": [130.0, 170.0],
+            "confidence_level": 0.80,
+            "data_quality_score": 0.85,
+        }
+    elif rt == "hybrid":
+        solar = {"annual_generation_gwh": 200.0, "capacity_factor": 0.22, "peak_power_mw": 100.0,
+                 "seasonal_variation": {"summer": 1.2, "winter": 0.8, "spring": 1.0, "fall": 0.9},
+                 "uncertainty_range": [180.0, 220.0], "confidence_level": 0.85, "data_quality_score": 0.9}
+        wind = {"annual_generation_gwh": 150.0, "capacity_factor": 0.35, "peak_power_mw": 50.0,
+                "seasonal_variation": {"summer": 0.9, "winter": 1.3, "spring": 1.1, "fall": 1.0},
+                "uncertainty_range": [130.0, 170.0], "confidence_level": 0.80, "data_quality_score": 0.85}
+        peak_power_mw = solar["peak_power_mw"] + wind["peak_power_mw"]
+        capacity_factor = (solar["capacity_factor"] * solar["peak_power_mw"] + wind["capacity_factor"] * wind["peak_power_mw"]) / peak_power_mw
+        estimation = {
+            "resource_type": "hybrid",
+            "annual_generation_gwh": solar["annual_generation_gwh"] + wind["annual_generation_gwh"],
+            "capacity_factor": capacity_factor,
+            "peak_power_mw": peak_power_mw,
+            "seasonal_variation": {k: (solar["seasonal_variation"][k] + wind["seasonal_variation"][k]) / 2 for k in ["summer", "winter", "spring", "fall"]},
+            "uncertainty_range": [solar["uncertainty_range"][0] + wind["uncertainty_range"][0], solar["uncertainty_range"][1] + wind["uncertainty_range"][1]],
+            "confidence_level": min(solar["confidence_level"], wind["confidence_level"]),
+            "data_quality_score": (solar["data_quality_score"] + wind["data_quality_score"]) / 2,
+        }
+    else:
+        raise HTTPException(status_code=400, detail=f"Unsupported resource type: {rt}")
+
+    return {"success": True, "estimation": estimation, "message": f"{rt.title()} resource estimation completed"}
+
+@app.post("/api/v1/cost-evaluation")
+async def evaluate_costs(request: CostEvaluationRequest):
+    project_type = request.project_data.get("project_type", "solar")
+    capacity_mw = float(request.project_data.get("capacity_mw", 100))
+    if project_type == "solar":
+        capex_per_mw = 1000000
+        opex_per_mw = 15000
+    elif project_type == "wind":
+        capex_per_mw = 1500000
+        opex_per_mw = 25000
+    else:
+        capex_per_mw = 1200000
+        opex_per_mw = 20000
+    total_capex = capacity_mw * capex_per_mw
+    annual_opex = capacity_mw * opex_per_mw
+    electricity_price = float(request.financial_params.get("electricity_price_usd_mwh", 50))
+    annual_generation_gwh = float(request.project_data.get("annual_generation_gwh", 200))
+    annual_revenue = annual_generation_gwh * electricity_price * 1000
+    project_lifetime = int(request.financial_params.get("project_lifetime", 25))
+    discount_rate = float(request.financial_params.get("discount_rate", 0.08))
+    npv = -total_capex
+    for year in range(1, project_lifetime + 1):
+        npv += (annual_revenue - annual_opex) / ((1 + discount_rate) ** year)
+    irr = (annual_revenue - annual_opex) / total_capex if total_capex else 0
+    evaluation_result = {
+        "project_type": project_type,
+        "capacity_mw": capacity_mw,
+        "total_capex_usd": total_capex,
+        "annual_opex_usd": annual_opex,
+        "annual_revenue_usd": annual_revenue,
+        "project_lifetime_years": project_lifetime,
+        "discount_rate": discount_rate,
+        "financial_metrics": {
+            "net_present_value_usd": npv,
+            "internal_rate_of_return": irr,
+            "payback_period_years": (total_capex / (annual_revenue - annual_opex)) if (annual_revenue - annual_opex) else None,
+            "levelized_cost_of_energy_usd_mwh": (total_capex / (annual_generation_gwh * project_lifetime)) if (annual_generation_gwh and project_lifetime) else None,
+        },
+    }
+    return {"success": True, "evaluation": evaluation_result, "message": "Cost evaluation completed"}
+
+@app.post("/api/v1/agent-chat")
+async def agent_chat(req: AgentChatRequest):
+    """Lightweight agent that can answer questions and run workflows based on the prompt.
+    It optionally geocodes the provided city (client may also pass lat/lon later).
+    """
+    msg = (req.message or "").lower()
+    resource_type = (req.resource_type or "solar").lower()
+
+    # Try to geocode if city provided
+    lat = None
+    lon = None
+    if req.city:
+        try:
+            import httpx
+            async with httpx.AsyncClient(timeout=10) as client:
+                r = await client.get("https://nominatim.openstreetmap.org/search", params={
+                    "format": "json", "q": req.city, "limit": 1
+                })
+                data = r.json()
+                if data:
+                    lat = float(data[0]["lat"])
+                    lon = float(data[0]["lon"])
+        except Exception:
+            pass
+
+    # If user forces chat mode, answer directly
+    if (req.mode or "").lower() == "chat":
+        from app.services.llm_service import LLMProvider, LLMRequest, llm_manager, TaskType
+        content = (
+            f"User asked: {req.message}."
+        )
+        response = await llm_manager.process_request(LLMRequest(
+            task_type=TaskType.NATURAL_LANGUAGE_QUERY,
+            prompt=content,
+            context={"city": req.city, "resource_type": resource_type},
+            provider=LLMProvider.GEMINI,
+            model="gemini-1.5-flash",
+            max_tokens=800,
+            temperature=0.5
+        ))
+        return {"success": True, "mode": "chat", "message": response.content}
+
+    # If we have coordinates, run the full workflow
+    results: Dict[str, Any] = {}
+    if lat is not None and lon is not None and ("analy" in msg or "estimate" in msg or "cost" in msg or "report" in msg):
+        site_resp = await analyze_site(SiteAnalysisRequest(
+            location=Location(latitude=lat, longitude=lon, area_km2=100),
+            project_type=resource_type,
+            analysis_depth="comprehensive"
+        ))
+        results["site_analysis"] = site_resp.get("analysis")
+
+        res_resp = await estimate_resources(ResourceEstimationRequest(
+            location=ResourceLocation(latitude=lat, longitude=lon, area_km2=100),
+            resource_type=resource_type,
+            system_config={}
+        ))
+        results["resource_estimation"] = res_resp.get("estimation")
+
+        cost_resp = await evaluate_costs(CostEvaluationRequest(
+            project_data={
+                "project_type": resource_type,
+                "capacity_mw": results["site_analysis"]["estimated_capacity_mw"],
+                "annual_generation_gwh": results["resource_estimation"]["annual_generation_gwh"],
+            },
+            financial_params={"electricity_price_usd_mwh": 50, "project_lifetime": 25, "discount_rate": 0.08}
+        ))
+        results["cost_evaluation"] = cost_resp.get("evaluation")
+
+        # Simple text-based report using existing text-analysis
+        report_text = (
+            f"Generate a brief project report for {req.city} ({lat}, {lon}). Resource: {resource_type}. "
+            f"Capacity: {results['site_analysis']['estimated_capacity_mw']} MW. "
+            f"Generation: {results['resource_estimation']['annual_generation_gwh']} GWh."
+        )
+        ta = await analyze_text(TextAnalysisRequest(text=report_text, analysis_type="report"))
+        results["report"] = ta.get("analysis")
+
+        return {"success": True, "mode": "workflow", "results": results}
+
+    # Otherwise provide a generic informative response using simple rules
+    help_text = (
+        "You can ask me to analyze a city (e.g., 'Analyze Kandy solar'), estimate resources, "
+        "evaluate costs, or generate a report by including a city name."
+    )
+    return {"success": True, "mode": "chat", "message": help_text}
 
 @app.get("/api/v1/system-status")
 async def get_system_status():
@@ -282,8 +342,7 @@ async def get_system_status():
         status = demo.get_system_status()
         return {"success": True, "status": status}
     except Exception as e:
-        logger.error(f"Error getting system status: {e}")
-        raise HTTPException(status_code=500, detail=f"System status check failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/v1/data-statistics")
 async def get_data_statistics():
@@ -292,63 +351,48 @@ async def get_data_statistics():
         stats = demo.get_data_statistics()
         return {"success": True, "statistics": stats}
     except Exception as e:
-        logger.error(f"Error getting data statistics: {e}")
-        raise HTTPException(status_code=500, detail=f"Data statistics failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
+# Register endpoint
+@app.post("/api/v1/register")
+async def register_user(request: RegisterRequest):
+    if request.username in USERS_DB:
+        raise HTTPException(status_code=400, detail="Username already exists")
+    
+    # Hash password
+    hashed_pw = bcrypt.hashpw(request.password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    
+    USERS_DB[request.username] = {
+        "username": request.username,
+        "email": request.email,
+        "password": hashed_pw
+    }
+    return {"success": True, "message": "User registered successfully"}
+
+# Authenticate endpoint
 @app.post("/api/v1/authenticate")
-async def authenticate(credentials: Dict[str, str]):
-    """Mock authentication for demo"""
-    try:
-        username = credentials.get("username", "")
-        password = credentials.get("password", "")
-        
-        # Demo credentials
-        if username == "demo" and password == "demo123":
-            logger.info(f"Successful authentication for user: {username}")
-            return {
-                "success": True,
-                "token": "demo_token_" + str(uuid.uuid4()),
-                "user": {
-                    "id": "1",
-                    "username": username,
-                    "email": f"{username}@geospark.com",
-                    "role": "user"
-                }
-            }
-        else:
-            logger.warning(f"Failed authentication attempt for user: {username}")
-            raise HTTPException(status_code=401, detail="Invalid credentials")
-    except Exception as e:
-        logger.error(f"Authentication error: {e}")
-        raise HTTPException(status_code=500, detail="Authentication service error")
-
-# Error handlers
-@app.exception_handler(404)
-async def not_found_handler(request, exc):
-    return {"error": "Not found", "message": "The requested resource was not found"}
-
-@app.exception_handler(500)
-async def server_error_handler(request, exc):
-    logger.error(f"Internal server error: {exc}")
-    return {"error": "Internal server error", "message": "An unexpected error occurred"}
+async def authenticate_user(request: AuthenticationRequest):
+    user = USERS_DB.get(request.username)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    # Verify password
+    if not bcrypt.checkpw(request.password.encode('utf-8'), user["password"].encode('utf-8')):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    # Generate token
+    token = str(uuid.uuid4())
+    
+    return {
+        "success": True,
+        "token": token,
+        "user": {
+            "id": "1",  # Demo ID
+            "username": user["username"],
+            "email": user["email"],
+            "role": "user"
+        }
+    }
 
 if __name__ == "__main__":
-    print("🚀 Starting GeoSpark Demo API...")
-    print("=" * 50)
-    print("API Documentation: http://localhost:8000/docs")
-    print("Interactive API: http://localhost:8000/redoc")
-    print("Health Check: http://localhost:8000/health")
-    print("Root Endpoint: http://localhost:8000/")
-    print("=" * 50)
-    print("Demo Credentials:")
-    print("  Username: demo")
-    print("  Password: demo123")
-    print("=" * 50)
-    
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
-        log_level="info"
-    )
+    uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -38,10 +38,13 @@ api.interceptors.response.use(
 
 // API endpoints
 export const apiEndpoints = {
-  // Authentication
+ 
   authenticate: (credentials: { username: string; password: string }) =>
     api.post('/authenticate', credentials),
-  
+  register: (data: { username: string; email: string; password: string }) =>
+    api.post('/register', data),
+
+
   // Site Analysis
   analyzeSite: (data: any) =>
     api.post('/site-analysis', data),
@@ -69,4 +72,8 @@ export const apiEndpoints = {
   // Data Statistics
   getDataStatistics: () =>
     api.get('/data-statistics'),
+
+  // Agent chat
+  agentChat: (data: { message: string; city?: string; resource_type?: string }) =>
+    api.post('/agent-chat', data),
 }
