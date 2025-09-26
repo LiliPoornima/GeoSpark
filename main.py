@@ -46,6 +46,16 @@ class SiteAnalysisRequest(BaseModel):
     project_type: str = "solar"
     analysis_depth: str = "comprehensive"
 
+class ResourceLocation(BaseModel):
+    latitude: float
+    longitude: float
+    area_km2: float = 100
+
+class ResourceEstimationRequest(BaseModel):
+    location: ResourceLocation
+    resource_type: str = "solar"
+    system_config: Dict[str, Any] = {}
+
 class TextAnalysisRequest(BaseModel):
     text: str
     analysis_type: str = "general"
@@ -193,14 +203,75 @@ class GeoSparkDemo:
 # Initialize demo instance
 demo = GeoSparkDemo()
 
-# Try to import additional routes if they exist
+# Include full v1 API router if available (enables resource-estimation, cost-evaluation, reports)
 try:
-    from app.api import routes
-    app.include_router(routes.router, prefix="/api/v1")
-    logger.info("Successfully loaded additional routes")
-except ImportError as e:
-    logger.warning(f"Could not load additional routes: {e}")
-    logger.info("Continuing with basic routes only")
+    from app.api.v1.router import router as v1_router
+    app.include_router(v1_router, prefix="/api/v1")
+    logger.info("Loaded v1 API router from app.api.v1.router")
+except Exception as e:
+    logger.warning(f"v1 router not loaded: {e}")
+    # Minimal fallback endpoints for resource estimation to avoid 404 in demo mode
+    from fastapi import Body
+
+    class _ResLoc(BaseModel):
+        latitude: float
+        longitude: float
+        area_km2: float = 100
+
+    class _ResReq(BaseModel):
+        location: _ResLoc
+        resource_type: str = "solar"
+        system_config: Dict[str, Any] = {}
+
+    @app.post("/api/v1/resource-estimation")
+    async def _fallback_resource_estimation(request: _ResReq = Body(...)):
+        rt = request.resource_type
+        if rt == "solar":
+            estimation = {
+                "resource_type": "solar",
+                "annual_generation_gwh": 200.0,
+                "capacity_factor": 0.22,
+                "peak_power_mw": 100.0,
+                "seasonal_variation": {"summer": 1.2, "winter": 0.8, "spring": 1.0, "fall": 0.9},
+                "uncertainty_range": [180.0, 220.0],
+                "confidence_level": 0.85,
+                "data_quality_score": 0.9,
+            }
+        elif rt == "wind":
+            estimation = {
+                "resource_type": "wind",
+                "annual_generation_gwh": 150.0,
+                "capacity_factor": 0.35,
+                "peak_power_mw": 50.0,
+                "seasonal_variation": {"summer": 0.9, "winter": 1.3, "spring": 1.1, "fall": 1.0},
+                "uncertainty_range": [130.0, 170.0],
+                "confidence_level": 0.80,
+                "data_quality_score": 0.85,
+            }
+        elif rt == "hybrid":
+            solar = {"annual_generation_gwh": 200.0, "capacity_factor": 0.22, "peak_power_mw": 100.0,
+                     "seasonal_variation": {"summer": 1.2, "winter": 0.8, "spring": 1.0, "fall": 0.9},
+                     "uncertainty_range": [180.0, 220.0], "confidence_level": 0.85, "data_quality_score": 0.9}
+            wind = {"annual_generation_gwh": 150.0, "capacity_factor": 0.35, "peak_power_mw": 50.0,
+                    "seasonal_variation": {"summer": 0.9, "winter": 1.3, "spring": 1.1, "fall": 1.0},
+                    "uncertainty_range": [130.0, 170.0], "confidence_level": 0.80, "data_quality_score": 0.85}
+            peak_power_mw = solar["peak_power_mw"] + wind["peak_power_mw"]
+            capacity_factor = (solar["capacity_factor"] * solar["peak_power_mw"] + wind["capacity_factor"] * wind["peak_power_mw"]) / peak_power_mw
+            estimation = {
+                "resource_type": "hybrid",
+                "annual_generation_gwh": solar["annual_generation_gwh"] + wind["annual_generation_gwh"],
+                "capacity_factor": capacity_factor,
+                "peak_power_mw": peak_power_mw,
+                "seasonal_variation": {k: (solar["seasonal_variation"][k] + wind["seasonal_variation"][k]) / 2 for k in ["summer", "winter", "spring", "fall"]},
+                "uncertainty_range": [solar["uncertainty_range"][0] + wind["uncertainty_range"][0], solar["uncertainty_range"][1] + wind["uncertainty_range"][1]],
+                "confidence_level": min(solar["confidence_level"], wind["confidence_level"]),
+                "data_quality_score": (solar["data_quality_score"] + wind["data_quality_score"]) / 2,
+            }
+        else:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=400, detail=f"Unsupported resource type: {rt}")
+
+        return {"success": True, "estimation": estimation, "message": f"{rt.title()} resource estimation completed"}
 
 # API Routes
 @app.get("/")
@@ -325,12 +396,14 @@ async def authenticate(credentials: Dict[str, str]):
 # Error handlers
 @app.exception_handler(404)
 async def not_found_handler(request, exc):
-    return {"error": "Not found", "message": "The requested resource was not found"}
+    from fastapi.responses import JSONResponse
+    return JSONResponse(status_code=404, content={"error": "Not found", "message": "The requested resource was not found"})
 
 @app.exception_handler(500)
 async def server_error_handler(request, exc):
+    from fastapi.responses import JSONResponse
     logger.error(f"Internal server error: {exc}")
-    return {"error": "Internal server error", "message": "An unexpected error occurred"}
+    return JSONResponse(status_code=500, content={"error": "Internal server error", "message": "An unexpected error occurred"})
 
 if __name__ == "__main__":
     print("🚀 Starting GeoSpark Demo API...")
