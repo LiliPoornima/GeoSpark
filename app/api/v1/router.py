@@ -10,7 +10,7 @@ from fastapi.security import HTTPBearer
 from pydantic import BaseModel, Field ,EmailStr
 import asyncio
 
-from app.core.security import get_current_user, security_manager
+from app.core.security import get_current_user, get_optional_user, security_manager
 from app.core.database import get_db
 from app.services.llm_service import llm_manager
 from app.services.nlp_service import nlp_processor
@@ -127,7 +127,7 @@ async def analyze_site(
 @router.post("/resource-estimation")
 async def estimate_resources(
     request: ResourceEstimationRequest,
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_optional_user)
 ):
     """Estimate renewable energy resources for a location"""
     try:
@@ -170,6 +170,57 @@ async def estimate_resources(
                 "confidence_level": 0.80,
                 "data_quality_score": 0.85
             }
+        elif request.resource_type == "hybrid":
+            # Combine solar and wind simple models
+            solar = {
+                "annual_generation_gwh": 200.0,
+                "capacity_factor": 0.22,
+                "peak_power_mw": 100.0,
+                "seasonal_variation": {"summer": 1.2, "winter": 0.8, "spring": 1.0, "fall": 0.9},
+                "uncertainty_range": [180.0, 220.0],
+                "confidence_level": 0.85,
+                "data_quality_score": 0.9,
+            }
+            wind = {
+                "annual_generation_gwh": 150.0,
+                "capacity_factor": 0.35,
+                "peak_power_mw": 50.0,
+                "seasonal_variation": {"summer": 0.9, "winter": 1.3, "spring": 1.1, "fall": 1.0},
+                "uncertainty_range": [130.0, 170.0],
+                "confidence_level": 0.80,
+                "data_quality_score": 0.85,
+            }
+
+            peak_power_mw = solar["peak_power_mw"] + wind["peak_power_mw"]
+            annual_generation_gwh = solar["annual_generation_gwh"] + wind["annual_generation_gwh"]
+            # Weighted capacity factor by peak power contribution
+            capacity_factor = (
+                (solar["capacity_factor"] * solar["peak_power_mw"]) +
+                (wind["capacity_factor"] * wind["peak_power_mw"]) 
+            ) / peak_power_mw
+            # Average seasonal multipliers
+            seasonal_variation = {
+                k: (solar["seasonal_variation"][k] + wind["seasonal_variation"][k]) / 2.0
+                for k in ["summer", "winter", "spring", "fall"]
+            }
+            # Combine uncertainty ranges conservatively by summing bounds
+            uncertainty_range = [
+                solar["uncertainty_range"][0] + wind["uncertainty_range"][0],
+                solar["uncertainty_range"][1] + wind["uncertainty_range"][1],
+            ]
+            confidence_level = min(solar["confidence_level"], wind["confidence_level"])  # pessimistic
+            data_quality_score = (solar["data_quality_score"] + wind["data_quality_score"]) / 2.0
+
+            estimation_result = {
+                "resource_type": "hybrid",
+                "annual_generation_gwh": annual_generation_gwh,
+                "capacity_factor": capacity_factor,
+                "peak_power_mw": peak_power_mw,
+                "seasonal_variation": seasonal_variation,
+                "uncertainty_range": uncertainty_range,
+                "confidence_level": confidence_level,
+                "data_quality_score": data_quality_score,
+            }
         else:
             raise HTTPException(status_code=400, detail=f"Unsupported resource type: {request.resource_type}")
         
@@ -186,7 +237,7 @@ async def estimate_resources(
 @router.post("/cost-evaluation")
 async def evaluate_costs(
     request: CostEvaluationRequest,
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_optional_user)
 ):
     """Evaluate project costs and financial viability"""
     try:
@@ -270,7 +321,7 @@ async def evaluate_costs(
 @router.post("/text-analysis")
 async def analyze_text(
     request: TextAnalysisRequest,
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_optional_user)
 ):
     """Analyze text using NLP techniques"""
     try:
@@ -299,7 +350,7 @@ async def analyze_text(
 @router.post("/data-search")
 async def search_data(
     request: DataSearchRequest,
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_optional_user)
 ):
     """Search for renewable energy data"""
     try:
@@ -365,7 +416,7 @@ async def search_data(
 @router.post("/llm-analysis")
 async def llm_analysis(
     request: Dict[str, Any],
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_optional_user)
 ):
     """Perform LLM-based analysis"""
     try:
@@ -389,7 +440,7 @@ async def llm_analysis(
 @router.post("/generate-report")
 async def generate_report(
     request: Dict[str, Any],
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_optional_user)
 ):
     """Generate comprehensive project report"""
     try:
@@ -439,7 +490,7 @@ async def authenticate_user(request: AuthenticationRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/system-status")
-async def get_system_status(current_user: Dict[str, Any] = Depends(get_current_user)):
+async def get_system_status(current_user: Dict[str, Any] = Depends(get_optional_user)):
     """Get system status and health"""
     try:
         # Get data statistics
@@ -483,7 +534,7 @@ async def get_system_status(current_user: Dict[str, Any] = Depends(get_current_u
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/data-statistics")
-async def get_data_statistics(current_user: Dict[str, Any] = Depends(get_current_user)):
+async def get_data_statistics(current_user: Dict[str, Any] = Depends(get_optional_user)):
     """Get data statistics"""
     try:
         stats = await ir_engine.get_data_statistics()
@@ -498,7 +549,7 @@ async def get_data_statistics(current_user: Dict[str, Any] = Depends(get_current
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/clear-cache")
-async def clear_cache(current_user: Dict[str, Any] = Depends(get_current_user)):
+async def clear_cache(current_user: Dict[str, Any] = Depends(get_optional_user)):
     """Clear system cache"""
     try:
         await ir_engine.clear_cache()

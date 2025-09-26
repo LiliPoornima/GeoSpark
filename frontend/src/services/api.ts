@@ -72,4 +72,8 @@ export const apiEndpoints = {
   // Data Statistics
   getDataStatistics: () =>
     api.get('/data-statistics'),
+
+  // Agent chat
+  agentChat: (data: { message: string; city?: string; resource_type?: string }) =>
+    api.post('/agent-chat', data),
 }
