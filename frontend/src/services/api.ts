@@ -38,10 +38,13 @@ api.interceptors.response.use(
 
 // API endpoints
 export const apiEndpoints = {
-  // Authentication
+ 
   authenticate: (credentials: { username: string; password: string }) =>
     api.post('/authenticate', credentials),
-  
+  register: (data: { username: string; email: string; password: string }) =>
+    api.post('/register', data),
+
+
   // Site Analysis
   analyzeSite: (data: any) =>
     api.post('/site-analysis', data),

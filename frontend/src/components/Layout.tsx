@@ -1,5 +1,5 @@
 import React from 'react'
-import { Outlet, Link, useLocation } from 'react-router-dom'
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { 
   Home, 
@@ -13,8 +13,9 @@ import {
 } from 'lucide-react'
 
 export function Layout() {
-  const { user, logout } = useAuth()
+  const { user, logout: authLogout } = useAuth()
   const location = useLocation()
+  const navigate = useNavigate() // <-- for redirecting after logout
 
   const navigation = [
     { name: 'Home', href: '/', icon: Home },
@@ -24,6 +25,12 @@ export function Layout() {
     { name: 'Cost Evaluation', href: '/cost-evaluation', icon: DollarSign },
     { name: 'Reports', href: '/reports', icon: FileText },
   ]
+
+  // Handle logout + redirect
+  const handleLogout = () => {
+    authLogout()        // clear user state
+    navigate('/login')  // redirect to login page
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -61,28 +68,45 @@ export function Layout() {
             })}
           </nav>
 
-          {/* User info */}
+          {/* User info or auth actions */}
           <div className="border-t border-gray-200 p-4">
-            <div className="flex items-center space-x-3">
-              <div className="h-8 w-8 rounded-full bg-gray-300 flex items-center justify-center">
-                <User className="h-4 w-4 text-gray-600" />
+            {user ? (
+              <div className="flex items-center space-x-3">
+                <div className="h-8 w-8 rounded-full bg-gray-300 flex items-center justify-center">
+                  <User className="h-4 w-4 text-gray-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <Link to="/profile" className="text-sm font-medium text-gray-900 truncate hover:underline">
+                    {user.username}
+                  </Link>
+                  <p className="text-xs text-gray-500 truncate">
+                    {user.role}
+                  </p>
+                </div>
+                <button
+                  onClick={handleLogout} // <-- updated
+                  className="p-1 text-gray-400 hover:text-gray-600"
+                  title="Logout"
+                >
+                  <LogOut className="h-4 w-4" />
+                </button>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">
-                  {user?.username}
-                </p>
-                <p className="text-xs text-gray-500 truncate">
-                  {user?.role}
-                </p>
+            ) : (
+              <div className="flex items-center justify-between space-x-2">
+                <Link
+                  to="/login"
+                  className="w-1/2 text-center px-3 py-2 text-sm font-medium rounded-md text-green-700 bg-green-100 hover:bg-green-200"
+                >
+                  Sign in
+                </Link>
+                <Link
+                  to="/signup"
+                  className="w-1/2 text-center px-3 py-2 text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700"
+                >
+                  Sign up
+                </Link>
               </div>
-              <button
-                onClick={logout}
-                className="p-1 text-gray-400 hover:text-gray-600"
-                title="Logout"
-              >
-                <LogOut className="h-4 w-4" />
-              </button>
-            </div>
+            )}
           </div>
         </div>
       </div>
