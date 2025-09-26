@@ -46,6 +46,7 @@ export function CostEvaluation() {
         <p className="text-gray-600">Evaluate project costs and financial viability</p>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Input Form */}
         <div className="bg-white rounded-lg shadow p-6">
           <h2 className="text-lg font-semibold mb-4">Inputs</h2>
           <form className="space-y-4" onSubmit={onSubmit}>
@@ -78,10 +79,13 @@ export function CostEvaluation() {
                 <input name="discount_rate" type="number" step="0.01" value={financial.discount_rate} onChange={onChange} className="w-full px-3 py-2 border rounded-md" />
               </div>
             </div>
-            <button type="submit" disabled={isLoading} className="w-full bg-green-600 text-white py-2 px-4 rounded-md disabled:opacity-50">{isLoading ? 'Evaluating...' : 'Evaluate Costs'}</button>
+            <button type="submit" disabled={isLoading} className="w-full bg-green-600 text-white py-2 px-4 rounded-md disabled:opacity-50">
+              {isLoading ? 'Evaluating...' : 'Evaluate Costs'}
+            </button>
           </form>
         </div>
 
+        {/* Results */}
         <div className="bg-white rounded-lg shadow p-6">
           <h2 className="text-lg font-semibold mb-4">Results</h2>
           {!result ? (
@@ -90,34 +94,35 @@ export function CostEvaluation() {
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <div className="text-sm text-gray-600">Total CAPEX</div>
-                  <div className="font-semibold">${'{'}result.total_capex_usd.toLocaleString(){'}'}</div>
+                  <div className="text-sm text-gray-600">Total CAPEX (Capital Expenditure)</div>
+                  <div className="font-semibold">${result.total_capex_usd.toLocaleString()}</div>
                 </div>
                 <div>
-                  <div className="text-sm text-gray-600">Annual OPEX</div>
-                  <div className="font-semibold">${'{'}result.annual_opex_usd.toLocaleString(){'}'}</div>
+                  <div className="text-sm text-gray-600">Annual OPEX (Operational Expenditure)</div>
+                  <div className="font-semibold">${result.annual_opex_usd.toLocaleString()}</div>
                 </div>
                 <div>
                   <div className="text-sm text-gray-600">Annual Revenue</div>
-                  <div className="font-semibold">${'{'}result.annual_revenue_usd.toLocaleString(){'}'}</div>
+                  <div className="font-semibold">${result.annual_revenue_usd.toLocaleString()}</div>
                 </div>
+                <div className="mt-2">
+                <div className="text-sm text-gray-600">NPV <br></br>(Net Present Value)</div>
+                <div className="font-semibold">${result.financial_metrics.net_present_value_usd.toLocaleString()}</div>
               </div>
-              <div className="mt-2">
-                <div className="text-sm text-gray-600">NPV</div>
-                <div className="font-semibold">${'{'}result.financial_metrics.net_present_value_usd.toLocaleString(){'}'}</div>
               </div>
+              
               <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <div className="text-sm text-gray-600">IRR</div>
-                  <div className="font-semibold">{'{'}(result.financial_metrics.internal_rate_of_return * 100).toFixed(2){'}'}%</div>
+                  <div className="text-sm text-gray-600">IRR <br></br>(Internal Rate of Return)</div>
+                  <div className="font-semibold">{(result.financial_metrics.internal_rate_of_return * 100).toFixed(2)}%</div>
                 </div>
                 <div>
                   <div className="text-sm text-gray-600">Payback (yrs)</div>
-                  <div className="font-semibold">{'{'}result.financial_metrics.payback_period_years.toFixed(1){'}'}</div>
+                  <div className="font-semibold">{result.financial_metrics.payback_period_years?.toFixed(1)}</div>
                 </div>
                 <div>
-                  <div className="text-sm text-gray-600">LCOE ($/MWh)</div>
-                  <div className="font-semibold">{'{'}result.financial_metrics.levelized_cost_of_energy_usd_mwh.toFixed(2){'}'}</div>
+                  <div className="text-sm text-gray-600">LCOE <br></br>(Levelized Cost Of Energy) ($/MWh)</div>
+                  <div className="font-semibold">{result.financial_metrics.levelized_cost_of_energy_usd_mwh?.toFixed(2)}</div>
                 </div>
               </div>
             </div>
