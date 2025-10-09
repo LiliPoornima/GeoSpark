@@ -2,55 +2,86 @@
 # pip install google-genai
 
 import os
+import streamlit as st
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
 
+# Load environment variables from .env file
 load_dotenv()
 
-def generate():
+# --- Gemini Configuration and Initialization ---
+
+# Initialize the Gemini API client
+# The client object is initialized once when the script runs
+try:
     client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-    model_name = "gemini-2.5-flash"
+    model_name = "gemini-2.0-flash"
+except Exception as e:
+    st.error(f"Error initializing Gemini client: {e}")
+    st.stop() # Stop the app if initialization fails
 
-    # System instructions
-    system_message = types.Content(
-        role="system",
-        parts=[types.Part.from_text(text="""You are an expert in renewable energy. Your name is Sparks.
+# Define the system instruction and tools
+SYSTEM_INSTRUCTION = """You are an expert in renewable energy. Your name is Sparks.
 You are the chatbot for a renewable energy site selector system with 3 features: location analysis, resource estimation, and cost evaluation.
-You can use Google Search to fetch real-time information about renewable energy. Engage interactively with users, explain concepts clearly, use interesting greetings, and share fun facts about renewable energy when it isappropriate.""")]
+You can use Google Search to fetch real-time information about renewable energy. Engage interactively with users, explain concepts clearly, use interesting greetings, and share fun facts where appropriate."""
+
+TOOLS = [
+    types.Tool(
+        googleSearch=types.GoogleSearch()
     )
+]
 
-    # Chat history
-    history = [system_message]
+# --- Streamlit Application Setup ---
 
-    print("⚡ Sparks Bot is ready! Type 'exit' to quit.\n")
+# Set the page configuration
+st.set_page_config(page_title="Sparks - Renewable Energy Chatbot", page_icon="⚡")
 
-    while True:
-        user_input = input("You: ")
-        if user_input.lower() in ["exit", "quit"]:
-            print("Goodbye!")
-            break
+st.title("⚡ Sparks - The Renewable Energy Chatbot")
+st.markdown("I'm your expert guide for renewable energy site selection, ready to analyze locations, estimate resources, and evaluate costs!")
 
-        # Add user message
-        user_message = types.Content(
-            role="user",
-            parts=[types.Part.from_text(text=user_input)]
-        )
-        history.append(user_message)
+# Initialize chat history in Streamlit's session state
+# Session state is how Streamlit maintains data across user interactions
+if "messages" not in st.session_state:
+    # Initialize with the system message and an initial greeting for the user
+    st.session_state.messages = [
+        types.Content(
+            role="system",
+            parts=[types.Part.from_text(text=SYSTEM_INSTRUCTION)]
+        ),
+        {"role": "assistant", "content": "Hello! I'm Sparks. How can I power up your knowledge about renewable energy today?"}
+    ]
 
-        # Define Google Search tool
-        tools = [
-            types.Tool(
-                googleSearch=types.GoogleSearch()
-            )
-        ]
+# --- Function to generate response using Gemini ---
 
-        # Generate response with Google Search tool
+def generate_response(prompt: str):
+    """Generates content from the Gemini model using the current history."""
+    
+    # Construct the contents list from the history, skipping the Streamlit dict format
+    # and ensuring the history includes the system instruction (which is always the first item)
+    contents = []
+    for message in st.session_state.messages:
+        if isinstance(message, types.Content):
+            contents.append(message)
+        elif isinstance(message, dict):
+            # Convert previous messages in the display format back to types.Content
+            role = "user" if message["role"] == "user" else "assistant"
+            contents.append(types.Content(role=role, parts=[types.Part.from_text(text=message["content"])]))
+            
+    # Add the new user prompt as a types.Content object
+    user_message_content = types.Content(
+        role="user",
+        parts=[types.Part.from_text(text=prompt)]
+    )
+    contents.append(user_message_content)
+
+    try:
+        # Generate response with Google Search tool and safety settings
         response = client.models.generate_content(
             model=model_name,
-            contents=[user_message],
+            contents=contents, # Pass the full history for context
             config=types.GenerateContentConfig(
-                tools=tools,
+                tools=TOOLS,
                 temperature=0.45,
                 safety_settings=[
                     types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_ONLY_HIGH"),
@@ -60,33 +91,46 @@ You can use Google Search to fetch real-time information about renewable energy.
                 ],
             )
         )
+        
+        # Extract the model's reply
+        model_reply = response.text if response.text else "I couldn't generate a definitive response."
+        
+        # Return the new user message content (for adding to history) and the reply
+        return user_message_content, model_reply
 
-        # Extract model reply
-        model_reply = response.text if response.text else None
-        if not model_reply:
-            for part in response.candidates[0].content.parts:
-                if part.text:
-                    model_reply = part.text
-                    break
-
-        if model_reply:
-            print(f"Sparks: {model_reply}\n")
-
-            # Append assistant message to history
-            assistant_message = types.Content(
-                role="assistant",
-                parts=[types.Part.from_text(text=model_reply)]
-            )
-            history.append(assistant_message)
-        else:
-            print("Sparks: I'm sorry, I couldn't generate a response.\n")
-
-if __name__ == "__main__":
-    generate()
+    except Exception as e:
+        # Handle API errors gracefully
+        return user_message_content, f"An error occurred: I failed to connect to the Gemini service. ({e})"
 
 
+# --- Display Chat History ---
 
-#VERSION 3.0
+# Display all messages from the session state, excluding the system instruction (index 0)
+for message in st.session_state.messages[1:]:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
+# --- Handle User Input ---
+
+if prompt := st.chat_input("Ask me about renewable energy site selection..."):
+    # 1. Display user message
+    st.chat_message("user").markdown(prompt)
+
+    # 2. Get response from the model
+    # The loading spinner runs while the model is thinking
+    with st.spinner("Sparks is consulting the grid..."):
+        user_content_obj, model_reply = generate_response(prompt)
+    
+    # 3. Display assistant message
+    with st.chat_message("assistant"):
+        st.markdown(model_reply)
+        
+    # 4. Update session state with the new messages
+    # Store messages in the simpler dictionary format for display persistence
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    st.session_state.messages.append({"role": "assistant", "content": model_reply})
+
+#Terminal code
 # import os
 # from google import genai
 # from google.genai import types
@@ -95,19 +139,18 @@ if __name__ == "__main__":
 # load_dotenv()
 
 # def generate():
-#     # Initialize the client
 #     client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-#     model_name = "gemini-2.0-flash"
+#     model_name = "gemini-2.5-flash"
 
-#     # System instructions for the chatbot
+#     # System instructions
 #     system_message = types.Content(
 #         role="system",
 #         parts=[types.Part.from_text(text="""You are an expert in renewable energy. Your name is Sparks.
 # You are the chatbot for a renewable energy site selector system with 3 features: location analysis, resource estimation, and cost evaluation.
-# Engage interactively with users, explain concepts clearly, use interesting greetings, and share fun facts where appropriate.""")]
+# You can use Google Search to fetch real-time information about renewable energy. Engage interactively with users, explain concepts clearly, use interesting greetings, and share fun facts about renewable energy when it is appropriate.""")]
 #     )
 
-#     # Chat history starts with system message
+#     # Chat history
 #     history = [system_message]
 
 #     print("⚡ Sparks Bot is ready! Type 'exit' to quit.\n")
@@ -118,117 +161,60 @@ if __name__ == "__main__":
 #             print("Goodbye!")
 #             break
 
-#         # Create user content and append to history
+#         # Add user message
 #         user_message = types.Content(
 #             role="user",
 #             parts=[types.Part.from_text(text=user_input)]
 #         )
 #         history.append(user_message)
 
-#         # Send messages to the model
-#         response = client.chat.generate(
-#             model=model_name,
-#             messages=history,
-#             temperature=0.45,
-#             safety_settings=[
-#                 types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_ONLY_HIGH"),
-#                 types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="BLOCK_ONLY_HIGH"),
-#                 types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="BLOCK_ONLY_HIGH"),
-#                 types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="BLOCK_ONLY_HIGH"),
-#             ],
-#         )
-
-#         # Extract the model reply
-#         model_reply = response.output_text 
-#         print(f"Sparks: {model_reply}\n")
-
-#         # Append model reply to history
-#         assistant_message = types.Content(
-#             role="assistant",
-#             parts=[types.Part.from_text(text=model_reply)]
-#         )
-#         history.append(assistant_message)
-
-# if __name__ == "__main__":
-#     generate()
-
-
-#VERSION 2.0
-# import os
-# from google import genai
-# from google.genai import types
-# from dotenv import load_dotenv
-
-# load_dotenv()
-
-# def generate():
-#     # Initialize the client
-#     client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-
-#     model_name = "gemini-2.0-flash"
-
-#     # System instructions for the chatbot
-#     system_message = types.Content(
-#         role="system",
-#         parts=[
-#             types.Part.from_text(
-#                 text="""You are an expert in renewable energy. Your name is Sparks. 
-# You are the chatbot for a renewable energy site selector system with 3 features: location analysis, resource estimation, and cost evaluation.
-# Engage interactively with users, explain concepts clearly, use interesting greetings, and share fun facts where appropriate."""
+#         # Define Google Search tool
+#         tools = [
+#             types.Tool(
+#                 googleSearch=types.GoogleSearch()
 #             )
 #         ]
-#     )
 
-#     # Chat history starts with system message
-#     history = [system_message]
-
-#     print("⚡ Sparks Bot is ready! Type 'exit' to quit.\n")
-
-#     while True:
-#         user_input = input("You: ")
-#         if user_input.lower() in ["exit", "quit"]:
-#             print("Goodbye!")
-#             break
-
-#         # Create a user message
-#         user_message = types.Content(
-#             role="user",
-#             parts=[types.Part.from_text(text = user_input)]
-#         )
-#         history.append(user_message)
-
-#         assistant_message = types.Content(
-#              role="assistant",
-#              parts=[types.Part.from_text(text=model_reply)]
-#         )
-
-#         # Send messages to the model
-#         response = client.chat.send_message(
+#         # Generate response with Google Search tool
+#         response = client.models.generate_content(
 #             model=model_name,
-#             messages=history,
-#             temperature=0.45,
-#             safety_settings=[
-#                 types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_ONLY_HIGH"),
-#                 types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="BLOCK_ONLY_HIGH"),
-#                 types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="BLOCK_ONLY_HIGH"),
-#                 types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="BLOCK_ONLY_HIGH"),
-#             ],
-#         )
-
-#         # Get model reply
-#         model_reply = response.candidates[0].content[0].text
-#         print(f"Sparks: {model_reply}\n")
-
-#         # Append model reply to history
-#         history.append(
-#             types.Message(
-#                 role="assistant",
-#                 content=[types.Part.from_text(model_reply)]
+#             contents=[user_message],
+#             config=types.GenerateContentConfig(
+#                 tools=tools,
+#                 temperature=0.45,
+#                 safety_settings=[
+#                     types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_ONLY_HIGH"),
+#                     types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="BLOCK_ONLY_HIGH"),
+#                     types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="BLOCK_ONLY_HIGH"),
+#                     types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="BLOCK_ONLY_HIGH"),
+#                 ],
 #             )
 #         )
 
+#         # Extract model reply
+#         model_reply = response.text if response.text else None
+#         if not model_reply:
+#             for part in response.candidates[0].content.parts:
+#                 if part.text:
+#                     model_reply = part.text
+#                     break
+
+#         if model_reply:
+#             print(f"Sparks: {model_reply}\n")
+
+#             # Append assistant message to history
+#             assistant_message = types.Content(
+#                 role="assistant",
+#                 parts=[types.Part.from_text(text=model_reply)]
+#             )
+#             history.append(assistant_message)
+#         else:
+#             print("Sparks: I'm sorry, I couldn't generate a response.\n")
+
 # if __name__ == "__main__":
 #     generate()
+
+
 
 
 #ORIGINAL
