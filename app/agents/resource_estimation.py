@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 import numpy as np
 import pandas as pd
 from dataclasses import dataclass
-#import requests
+import requests
 
 from app.agents.communication import BaseAgent, AgentMessage, MessagePriority
 from app.core.logging import agent_logger
