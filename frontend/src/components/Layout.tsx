@@ -24,6 +24,7 @@ export function Layout() {
     { name: 'Resource Estimation', href: '/resource-estimation', icon: Zap },
     { name: 'Cost Evaluation', href: '/cost-evaluation', icon: DollarSign },
     { name: 'Reports', href: '/reports', icon: FileText },
+    { name: 'AI Agent', href: '/agent', icon: Zap },
   ]
 
   // Handle logout + redirect
