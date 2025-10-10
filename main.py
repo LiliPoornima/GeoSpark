@@ -263,10 +263,12 @@ async def agent_chat(req: AgentChatRequest):
         try:
             import httpx
             async with httpx.AsyncClient(timeout=10) as client:
-                r = await client.get("https://nominatim.openstreetmap.org/search", params={
-                    "format": "json", "q": req.city, "limit": 1
-                })
-                data = r.json()
+                r = await client.get(
+                    "https://nominatim.openstreetmap.org/search",
+                    params={"format": "json", "q": req.city, "limit": 1},
+                    headers={"User-Agent": "geospark-demo"}  # ✅ required
+                )
+                data = await r.json()  # ✅ must await here
                 if data:
                     lat = float(data[0]["lat"])
                     lon = float(data[0]["lon"])
