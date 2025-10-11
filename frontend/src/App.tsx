@@ -7,11 +7,12 @@ import { SiteAnalysis } from './pages/SiteAnalysis'
 import { ResourceEstimation } from './pages/ResourceEstimation'
 import { CostEvaluation } from './pages/CostEvaluation'
 import { Reports } from './pages/Reports'
-import { Agent } from './pages/Agent'
+//import { Agent } from './pages/Agent'
 import { Login } from './pages/Login'
 import { Signup } from './pages/Signup'
 import { Profile } from './pages/Profile'
 import { Dashboard } from './pages/Dashboard'
+import SparksChat from './pages/SparksChat'
 
 function App() {
   return (
@@ -26,7 +27,9 @@ function App() {
           <Route path="resource-estimation" element={<ResourceEstimation />} />
           <Route path="cost-evaluation" element={<CostEvaluation />} />
           <Route path="reports" element={<Reports />} />
-          <Route path="agent" element={<Agent />} />
+          {/* <Route path="agent" element={<Agent />} /> */}
+          {/* <Route path='chatbot' element={<Chatbot/>}/> */}
+          <Route path='sparks' element={<SparksChat/>}/>
           <Route path="profile" element={<Profile />} />
         </Route>
       </Routes>
