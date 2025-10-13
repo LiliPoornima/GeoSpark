@@ -1,7 +1,10 @@
 import React from 'react'
-import { MapPin, Zap, DollarSign, BarChart3, Users, Globe } from 'lucide-react'
+import { MapPin, Zap, DollarSign, BarChart3, Cpu, Plug } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 
 export function Home() {
+  const navigate = useNavigate()
+
   const features = [
     {
       icon: MapPin,
@@ -36,6 +39,47 @@ export function Home() {
     { label: 'Time Saved', value: '80%' }
   ]
 
+  const steps = [
+    {
+      title: "Input Location",
+      description: "Provide coordinates and project specifications for analysis",
+      image: "https://physicsworld.com/wp-content/uploads/2018/11/green-energy-732214615-Shutterstock_lassedesignen-.jpg"
+    },
+    {
+      title: "AI Analysis",
+      description: "Our multi-agent system analyzes resources, costs, and risks",
+      image: "https://images.unsplash.com/photo-1504384308090-c894fdcc538d"
+    },
+    {
+      title: "Get Results",
+      description: "Receive comprehensive reports and recommendations",
+      image: "https://cdn.prod.website-files.com/65b217df08a6f1f6aba3d4ce/681b31f7eb0f79da8de6dd71_AD_4nXeapLEHLmxjNWt6flmeez3lX-CQq2Q9swhBApRixPQRWMCloLiyHMkCDS_EFe3qeb0PY5OxzabOnGEZtNBHtDVAqLhKm0WWRPmSeUJ6NZQrpPX_9bqeCeaBCkzDi2wbGgy4Po72.jpeg"
+    }
+  ]
+
+  const differentiators = [
+    {
+      icon: Cpu,
+      title: 'AI-powered insights',
+      description: 'Leverage advanced AI to get actionable energy insights instantly.'
+    },
+    {
+      icon: Zap,
+      title: 'Fast & accurate analysis',
+      description: 'Run simulations and analysis in record time with high accuracy.'
+    },
+    {
+      icon: Plug,
+      title: 'Easy integration',
+      description: 'Seamlessly integrate GeoSpark into your existing workflows.'
+    },
+    {
+      icon: DollarSign,
+      title: 'Cost savings',
+      description: 'Optimize resources and reduce operational costs efficiently.'
+    }
+  ]
+
   return (
     <div className="space-y-8">
       {/* Hero Section */}
@@ -49,10 +93,14 @@ export function Home() {
             resource estimation, and cost evaluation powered by advanced AI.
           </p>
           <div className="flex space-x-4">
-            <button className="bg-white text-green-600 px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors">
+            <button 
+              onClick={() => navigate('/login')} 
+              className="bg-white text-green-600 px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors">
               Start Analysis
             </button>
-            <button className="border-2 border-white text-white px-6 py-3 rounded-lg font-semibold hover:bg-white hover:text-green-600 transition-colors">
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="border-2 border-white text-white px-6 py-3 rounded-lg font-semibold hover:bg-white hover:text-green-600 transition-colors">
               View Demo
             </button>
           </div>
@@ -66,9 +114,7 @@ export function Home() {
             <div className="text-2xl font-bold text-green-600 mb-1">
               {stat.value}
             </div>
-            <div className="text-sm text-gray-600">
-              {stat.label}
-            </div>
+            <div className="text-sm text-gray-600">{stat.label}</div>
           </div>
         ))}
       </div>
@@ -87,9 +133,7 @@ export function Home() {
                   <h3 className="text-lg font-semibold text-gray-900 mb-2">
                     {feature.title}
                   </h3>
-                  <p className="text-gray-600 mb-4">
-                    {feature.description}
-                  </p>
+                  <p className="text-gray-600 mb-4">{feature.description}</p>
                   <a 
                     href={feature.href}
                     className="text-green-600 font-medium hover:text-green-700"
@@ -103,39 +147,49 @@ export function Home() {
         </div>
       </div>
 
+      {/* Differentiators / Why Choose Us */}
+      <div className="bg-gray-50 rounded-lg p-8">
+        <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">
+          Why Choose GeoSpark?
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          {differentiators.map((item, index) => (
+            <div
+              key={index}
+              className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow text-center"
+            >
+              <div className="flex justify-center mb-4">
+                <item.icon className="h-8 w-8 text-green-600" />
+              </div>
+              <h3 className="text-lg font-semibold mb-2">{item.title}</h3>
+              <p className="text-gray-600">{item.description}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* How it Works */}
       <div className="bg-gray-50 rounded-lg p-8">
         <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">
           How GeoSpark Works
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          <div className="text-center">
-            <div className="bg-green-600 text-white rounded-full w-12 h-12 flex items-center justify-center text-xl font-bold mx-auto mb-4">
-              1
+          {steps.map((step, index) => (
+            <div 
+              key={index}
+              className="bg-white rounded-xl shadow hover:shadow-lg transition-shadow overflow-hidden"
+            >
+              <img 
+                src={step.image} 
+                alt={step.title} 
+                className="w-full h-40 object-cover"
+              />
+              <div className="p-6 text-center">
+                <h3 className="text-lg font-semibold mb-2">{step.title}</h3>
+                <p className="text-gray-600">{step.description}</p>
+              </div>
             </div>
-            <h3 className="text-lg font-semibold mb-2">Input Location</h3>
-            <p className="text-gray-600">
-              Provide coordinates and project specifications for analysis
-            </p>
-          </div>
-          <div className="text-center">
-            <div className="bg-green-600 text-white rounded-full w-12 h-12 flex items-center justify-center text-xl font-bold mx-auto mb-4">
-              2
-            </div>
-            <h3 className="text-lg font-semibold mb-2">AI Analysis</h3>
-            <p className="text-gray-600">
-              Our multi-agent system analyzes resources, costs, and risks
-            </p>
-          </div>
-          <div className="text-center">
-            <div className="bg-green-600 text-white rounded-full w-12 h-12 flex items-center justify-center text-xl font-bold mx-auto mb-4">
-              3
-            </div>
-            <h3 className="text-lg font-semibold mb-2">Get Results</h3>
-            <p className="text-gray-600">
-              Receive comprehensive reports and recommendations
-            </p>
-          </div>
+          ))}
         </div>
       </div>
 

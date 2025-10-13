@@ -33,6 +33,12 @@ class Settings(BaseSettings):
     SOLAR_API_KEY: Optional[str] = Field(default=None, env="SOLAR_API_KEY")
     WIND_API_KEY: Optional[str] = Field(default=None, env="WIND_API_KEY")
     WEATHER_API_KEY: Optional[str] = Field(default=None, env="WEATHER_API_KEY")
+    GEMINI_API_KEY: Optional[str] = Field(default=None, env="GEMINI_API_KEY")
+    
+    # Stripe Configuration
+    STRIPE_SECRET_KEY: Optional[str] = Field(default=None, env="STRIPE_SECRET_KEY")
+    STRIPE_PUBLISHABLE_KEY: Optional[str] = Field(default=None, env="STRIPE_PUBLISHABLE_KEY")
+    STRIPE_WEBHOOK_SECRET: Optional[str] = Field(default=None, env="STRIPE_WEBHOOK_SECRET")
     
     # Elasticsearch Configuration
     ELASTICSEARCH_URL: str = Field(default="http://localhost:9200", env="ELASTICSEARCH_URL")
@@ -57,6 +63,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = True
+        extra = "allow"  # Allow extra fields from .env file
 
 
 # Global settings instance
