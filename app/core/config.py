@@ -19,11 +19,11 @@ class Settings(BaseSettings):
     PORT: int = Field(default=8000, env="PORT")
     
     # Database Configuration
-    DATABASE_URL: str = Field(env="DATABASE_URL")
-    REDIS_URL: str = Field(env="REDIS_URL")
+    DATABASE_URL: str = Field(default="sqlite:///./geospark_demo.db", env="DATABASE_URL")
+    REDIS_URL: str = Field(default="redis://localhost:6379/0", env="REDIS_URL")
     
     # Security Configuration
-    SECRET_KEY: str = Field(env="SECRET_KEY")
+    SECRET_KEY: str = Field(default="demo_secret_key_change_in_production", env="SECRET_KEY")
     ALGORITHM: str = Field(default="HS256", env="ALGORITHM")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=30, env="ACCESS_TOKEN_EXPIRE_MINUTES")
     
