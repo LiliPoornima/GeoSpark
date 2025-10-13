@@ -3,6 +3,7 @@ import { Send, Loader2, Zap, Search, CornerDownLeft } from 'lucide-react';
 import solar from '../assets/solar.jpg';
 import wind from '../assets/wind.jpg';
 import hydro from '../assets/hydro.jpg';
+import StripePaymentModal from '../components/StripePaymentModal';
 
 // === Type Definitions ===
 interface Source {
@@ -158,6 +159,10 @@ const SparksChatbot: React.FC = () => {
     const [isSending, setIsSending] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
+    const [hasAccess, setHasAccess] = useState(false);
+    const [showPaymentModal, setShowPaymentModal] = useState(false);
+    const [messageCount, setMessageCount] = useState(0);
+    const FREE_MESSAGE_LIMIT = 3;
 
     // Scroll to the latest message
     useEffect(() => {
@@ -182,8 +187,15 @@ const SparksChatbot: React.FC = () => {
         const messageText = input.trim();
         if (!messageText || isSending) return;
 
+        // Check if user needs to pay
+        if (!hasAccess && messageCount >= FREE_MESSAGE_LIMIT) {
+            setShowPaymentModal(true);
+            return;
+        }
+
         setIsSending(true);
         setInput('');
+        setMessageCount(prev => prev + 1);
 
         // Define IDs for the new messages up front
         const newUserMessageId = crypto.randomUUID();
@@ -275,6 +287,16 @@ const SparksChatbot: React.FC = () => {
         }
     };
 
+    const handlePaymentSuccess = () => {
+        setHasAccess(true);
+        setMessages(prev => [...prev, {
+            id: crypto.randomUUID(),
+            role: 'model',
+            text: '🎉 Thank you for your payment! You now have unlimited access to Sparks AI. How can I help you today?',
+            sources: []
+        }]);
+    };
+
     return (
         // New full-screen container for the background and chat content (1. Outermost div)
         <div className="relative h-screen w-full font-inter overflow-hidden">
@@ -301,11 +323,31 @@ const SparksChatbot: React.FC = () => {
                 <div className="flex flex-col h-full w-full bg-white/95 backdrop-blur-sm text-gray-900 rounded-xl shadow-2xl overflow-hidden border border-gray-200">
                     
                     {/* Header - Changed colors to use green branding */}
-                    <div className="p-4 bg-green-600 border-b border-green-800 flex items-center shadow-md text-white">
-                        <Zap className="h-6 w-6 text-white mr-3" />
-                        <h1 className="text-xl font-bold">Sparks Chatbot</h1>
-                        {/* Changed badge color */}
-                        <span className="ml-3 px-2 py-1 text-xs bg-green-900/50 rounded-full">Renewable Energy AI</span>
+                    <div className="p-4 bg-green-600 border-b border-green-800 flex items-center justify-between shadow-md text-white">
+                        <div className="flex items-center">
+                            <Zap className="h-6 w-6 text-white mr-3" />
+                            <h1 className="text-xl font-bold">Sparks Chatbot</h1>
+                            {/* Changed badge color */}
+                            <span className="ml-3 px-2 py-1 text-xs bg-green-900/50 rounded-full">Renewable Energy AI</span>
+                        </div>
+                        {!hasAccess && (
+                            <div className="flex items-center space-x-2">
+                                <span className="text-sm bg-green-900/50 px-3 py-1 rounded-full">
+                                    {FREE_MESSAGE_LIMIT - messageCount} free messages left
+                                </span>
+                                <button
+                                    onClick={() => setShowPaymentModal(true)}
+                                    className="bg-white text-green-600 px-4 py-1 rounded-full text-sm font-semibold hover:bg-green-50 transition-colors"
+                                >
+                                    Upgrade
+                                </button>
+                            </div>
+                        )}
+                        {hasAccess && (
+                            <span className="text-sm bg-green-900/50 px-3 py-1 rounded-full">
+                                ✨ Premium Access
+                            </span>
+                        )}
                     </div>
 
                     {/* Message Display Area - Added transparency to the background */}
@@ -372,6 +414,13 @@ const SparksChatbot: React.FC = () => {
                     `}</style>
                 </div>
             </div>
+
+            {/* Payment Modal */}
+            <StripePaymentModal
+                isOpen={showPaymentModal}
+                onClose={() => setShowPaymentModal(false)}
+                onPaymentSuccess={handlePaymentSuccess}
+            />
         </div>
     );
 };

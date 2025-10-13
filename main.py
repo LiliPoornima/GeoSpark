@@ -19,6 +19,9 @@ import bcrypt
 # Import the demo functionality
 from demo import GeoSparkDemo
 
+# Import Stripe routes
+from app.api.v1.stripe_routes import router as stripe_router
+
 # In-memory user DB
 USERS_DB: Dict[str, Dict] = {}
 
@@ -36,6 +39,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include Stripe payment routes
+app.include_router(stripe_router, prefix="/api/v1")
 
 # Initialize demo
 demo = GeoSparkDemo()
