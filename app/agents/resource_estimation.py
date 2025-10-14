@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 import numpy as np
 import pandas as pd
 from dataclasses import dataclass
-#import requests
+import requests  # For NASA POWER and Open-Meteo APIs
 
 from app.agents.communication import BaseAgent, AgentMessage, MessagePriority
 from app.core.logging import agent_logger
@@ -60,9 +60,13 @@ class ResourceEstimationAgent(BaseAgent):
         self.register_handler("get_weather_data", self._handle_get_weather)
         self.register_handler("calculate_energy_yield", self._handle_calculate_yield)
         
-        # External API configurations
-        self.weather_api_url = "https://api.openweathermap.org/data/2.5"
-        self.nrel_api_url = "https://developer.nrel.gov/api"
+        # Real API configurations (FREE APIs)
+        # NASA POWER for comprehensive weather and solar data
+        self.nasa_power_api_url = "https://power.larc.nasa.gov/api/temporal/daily/point"
+        # Open-Meteo for high-resolution wind and weather forecasts
+        self.openmeteo_api_url = "https://api.open-meteo.com/v1/forecast"
+        # NREL (optional - requires API key, but we'll use NASA POWER instead)
+        # self.nrel_api_url = "https://developer.nrel.gov/api"
         
     async def estimate_solar_resource(self, location_data: Dict[str, Any], 
                                    system_config: Dict[str, Any]) -> ResourceEstimate:
@@ -232,14 +236,162 @@ class ResourceEstimationAgent(BaseAgent):
             raise
     
     async def _get_weather_data(self, lat: float, lon: float) -> WeatherData:
-        """Get historical weather data for location"""
+        """Get real historical weather data from NASA POWER and Open-Meteo APIs"""
         try:
-            # In a real implementation, this would call weather APIs
-            # For now, we'll generate synthetic data
+            import requests
             
-            # Generate 1 year of hourly data
-            start_date = datetime.utcnow() - timedelta(days=365)
-            timestamps = [start_date + timedelta(hours=i) for i in range(8760)]
+            # Get solar irradiance and temperature from NASA POWER (last full year)
+            nasa_params = {
+                "parameters": "ALLSKY_SFC_SW_DWN,T2M,RH2M,PRECTOTCORR,PS",  # Solar, Temp, Humidity, Precipitation, Pressure
+                "community": "RE",
+                "longitude": lon,
+                "latitude": lat,
+                "start": "20230101",
+                "end": "20231231",
+                "format": "JSON"
+            }
+            
+            nasa_response = requests.get(
+                self.nasa_power_api_url,
+                params=nasa_params,
+                timeout=15
+            )
+            
+            # Get wind data from Open-Meteo (last 90 days, hourly)
+            meteo_params = {
+                "latitude": lat,
+                "longitude": lon,
+                "hourly": "temperature_2m,relative_humidity_2m,wind_speed_100m,wind_direction_100m,surface_pressure",
+                "past_days": 90,
+                "forecast_days": 0
+            }
+            
+            meteo_response = requests.get(
+                self.openmeteo_api_url,
+                params=meteo_params,
+                timeout=15
+            )
+            
+            if nasa_response.status_code == 200 and meteo_response.status_code == 200:
+                nasa_data = nasa_response.json()
+                meteo_data = meteo_response.json()
+                
+                # Parse NASA POWER data (daily)
+                nasa_params_data = nasa_data.get("properties", {}).get("parameter", {})
+                solar_irradiance_daily = nasa_params_data.get("ALLSKY_SFC_SW_DWN", {})
+                temp_daily = nasa_params_data.get("T2M", {})
+                humidity_daily = nasa_params_data.get("RH2M", {})
+                precip_daily = nasa_params_data.get("PRECTOTCORR", {})
+                pressure_daily = nasa_params_data.get("PS", {})
+                
+                # Parse Open-Meteo data (hourly)
+                meteo_hourly = meteo_data.get("hourly", {})
+                wind_speeds_hourly = meteo_hourly.get("wind_speed_100m", [])
+                wind_dir_hourly = meteo_hourly.get("wind_direction_100m", [])
+                temp_hourly = meteo_hourly.get("temperature_2m", [])
+                humidity_hourly = meteo_hourly.get("relative_humidity_2m", [])
+                pressure_hourly = meteo_hourly.get("surface_pressure", [])
+                time_hourly = meteo_hourly.get("time", [])
+
+                # Determine the number of hours we have; prefer explicit time array, else wind length, else temp length
+                n_hours = 0
+                for candidate in (len(time_hourly), len(wind_speeds_hourly), len(temp_hourly), 90 * 24):
+                    if candidate and candidate > 0:
+                        n_hours = candidate
+                        break
+                if n_hours == 0:
+                    raise ValueError("No hourly data returned from Open-Meteo")
+
+                # Helper to sanitize lists: cast to float and replace None/NaN, pad/truncate to n_hours
+                def _sanitize_numeric_list(lst, default_value: float) -> List[float]:
+                    out: List[float] = []
+                    length = len(lst) if isinstance(lst, list) else 0
+                    for i in range(n_hours):
+                        val = lst[i] if i < length else None
+                        try:
+                            # Treat None or nan as missing
+                            if val is None:
+                                raise ValueError("missing")
+                            f = float(val)
+                            if np.isnan(f):
+                                raise ValueError("nan")
+                            out.append(f)
+                        except Exception:
+                            out.append(float(default_value))
+                    return out
+                
+                # Convert NASA daily solar irradiance (kWh/m²/day) to hourly W/m²
+                # Assume solar radiation follows a sine curve during daylight hours
+                solar_irradiance_hourly: List[float] = []
+                timestamps: List[datetime] = []
+                start_date = datetime.utcnow() - timedelta(hours=n_hours)
+
+                for hour in range(n_hours):
+                    timestamp = start_date + timedelta(hours=hour)
+                    timestamps.append(timestamp)
+
+                    # Get daily solar irradiance from NASA (kWh/m²/day) with safe default
+                    date_key = timestamp.strftime("%Y%m%d")
+                    daily_value = solar_irradiance_daily.get(date_key, 4.5)
+                    try:
+                        daily_solar_kwh = float(daily_value) if daily_value is not None else 4.5
+                    except Exception:
+                        daily_solar_kwh = 4.5
+                    
+                    # Convert to hourly W/m² (assuming 12 hours of daylight)
+                    # Peak irradiance = daily_kwh * 1000 / (π/2) ≈ daily_kwh * 637
+                    hour_of_day = timestamp.hour
+                    if 6 <= hour_of_day <= 18:  # Daylight hours
+                        solar_w_m2 = daily_solar_kwh * 637 * np.sin(np.pi * (hour_of_day - 6) / 12)
+                    else:
+                        solar_w_m2 = 0
+                    solar_irradiance_hourly.append(float(max(0, solar_w_m2)))
+
+                # Use Open-Meteo hourly data for other parameters, sanitized to numeric and aligned to n_hours
+                temperature = _sanitize_numeric_list(temp_hourly, 15.0)
+                humidity = _sanitize_numeric_list(humidity_hourly, 60.0)
+                wind_speed = _sanitize_numeric_list(wind_speeds_hourly, 5.0)
+                wind_direction = _sanitize_numeric_list(wind_dir_hourly, 270.0)
+                pressure = _sanitize_numeric_list(pressure_hourly, 1013.0)
+
+                # Precipitation (mm/hour) - simplified from NASA daily data with safe default
+                precipitation_hourly: List[float] = []
+                for ts in timestamps:
+                    daily_precip = precip_daily.get(ts.strftime("%Y%m%d"))
+                    try:
+                        val = float(daily_precip) if daily_precip is not None else 0.0
+                    except Exception:
+                        val = 0.0
+                    precipitation_hourly.append(val / 24.0)
+                
+                logger.info(f"Successfully fetched real weather data for ({lat}, {lon}) from NASA POWER and Open-Meteo")
+                
+                return WeatherData(
+                    temperature_celsius=temperature,
+                    humidity_percent=humidity,
+                    wind_speed_ms=wind_speed,
+                    wind_direction_degrees=wind_direction,
+                    solar_irradiance_wm2=solar_irradiance_hourly,
+                    precipitation_mm=precipitation_hourly,
+                    pressure_hpa=pressure,
+                    timestamp=timestamps
+                )
+            else:
+                logger.warning(f"API calls failed: NASA={nasa_response.status_code}, Meteo={meteo_response.status_code}")
+                raise ValueError("API calls failed")
+            
+        except Exception as e:
+            logger.error(f"Error fetching real weather data: {e}")
+            # Fallback to synthetic data
+            return await self._get_synthetic_weather_data(lat, lon)
+    
+    async def _get_synthetic_weather_data(self, lat: float, lon: float) -> WeatherData:
+        """Generate synthetic weather data as fallback (when APIs are unavailable)"""
+        try:
+            # Generate 90 days of hourly data (matching Open-Meteo's range)
+            start_date = datetime.utcnow() - timedelta(days=90)
+            timestamps = [start_date + timedelta(hours=i) for i in range(90 * 24)]
+            
             
             # Generate realistic weather patterns
             temperature = self._generate_temperature_data(timestamps, lat)
@@ -249,6 +401,8 @@ class ResourceEstimationAgent(BaseAgent):
             solar_irradiance = self._generate_solar_irradiance_data(timestamps, lat)
             precipitation = self._generate_precipitation_data(timestamps)
             pressure = self._generate_pressure_data(timestamps)
+            
+            logger.info(f"Using synthetic weather data (fallback) for ({lat}, {lon})")
             
             return WeatherData(
                 temperature_celsius=temperature,
@@ -262,8 +416,8 @@ class ResourceEstimationAgent(BaseAgent):
             )
             
         except Exception as e:
-            logger.error(f"Error getting weather data: {e}")
-            # Return default data
+            logger.error(f"Error generating synthetic weather data: {e}")
+            # Return minimal default data
             return self._get_default_weather_data()
     
     def _generate_temperature_data(self, timestamps: List[datetime], lat: float) -> List[float]:
