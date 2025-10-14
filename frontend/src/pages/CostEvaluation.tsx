@@ -105,6 +105,7 @@ export function CostEvaluation() {
                   <div className="text-sm text-gray-600">Annual Revenue</div>
                   <div className="font-semibold">${result.annual_revenue_usd.toLocaleString()}</div>
                 </div>
+                
                 <div className="mt-2">
                 <div className="text-sm text-gray-600">NPV <br></br>(Net Present Value)</div>
                 <div className="font-semibold">${result.financial_metrics.net_present_value_usd.toLocaleString()}</div>

@@ -4,6 +4,12 @@ GeoSpark API Server - Enhanced Professional Version
 Run this with: python main.py
 """
 
+# At the top of main.py
+RECENT_ACTIVITIES: list[dict] = []
+
+
+
+
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -117,6 +123,10 @@ class ComprehensiveReportRequest(BaseModel):
     report_type: str = "executive"  # executive, investor, technical, environmental
     estimated_cost: Optional[float] = None
     timeline_months: Optional[int] = None
+
+
+
+    
 
 # Enhanced calculation functions for realistic metrics
 def calculate_realistic_metrics(request: ComprehensiveReportRequest) -> ReportMetrics:
@@ -799,6 +809,88 @@ async def authenticate_user(request: AuthenticationRequest):
             "role": "user"
         }
     }
+
+@app.post("/api/v1/full-analysis")
+async def full_analysis(request: SiteAnalysisRequest):
+    """
+    Run the full workflow: site analysis, resource estimation, cost evaluation, and report summary.
+    Returns plain JSON suitable for frontend consumption.
+    """
+    try:
+        # --- Site Analysis ---
+        site_resp = await analyze_site(request)
+        site_analysis = site_resp.get("analysis", {})
+
+        # --- Resource Estimation ---
+        res_request = ResourceEstimationRequest(
+            location=ResourceLocation(**request.location.model_dump()),  # Pydantic v2
+            resource_type=request.project_type,
+            system_config={}
+        )
+        res_resp = await estimate_resources(res_request)
+        resource_estimation = res_resp.get("estimation", {})
+
+        # --- Cost Evaluation ---
+        cost_request = CostEvaluationRequest(
+            project_data={
+                "project_type": request.project_type,
+                "capacity_mw": site_analysis.get("estimated_capacity_mw", 0),
+                "annual_generation_gwh": resource_estimation.get("annual_generation_gwh", 0),
+            },
+            financial_params={"electricity_price_usd_mwh": 50, "project_lifetime": 25, "discount_rate": 0.08}
+        )
+        cost_resp = await evaluate_costs(cost_request)
+        cost_evaluation = cost_resp.get("evaluation", {})
+
+        # --- Simple Text Report ---
+        report_text = (
+            f"Project report: {request.project_type} project at "
+            f"({request.location.latitude}, {request.location.longitude}). "
+            f"Capacity: {site_analysis.get('estimated_capacity_mw', 0)} MW. "
+            f"Generation: {resource_estimation.get('annual_generation_gwh', 0)} GWh."
+        )
+        ta_resp = await analyze_text(TextAnalysisRequest(text=report_text, analysis_type="report"))
+        report_summary = ta_resp.get("analysis", "")
+
+        # --- Compose workflow ---
+        workflow = {
+            "site_analysis": dict(site_analysis),          # convert Pydantic to dict
+            "resource_estimation": dict(resource_estimation),
+            "cost_evaluation": dict(cost_evaluation),
+            "report_summary": str(report_summary),
+        }
+
+        # --- Track Recent Activity ---
+        activity = {
+            "project": f"{request.project_type.title()} project",
+            "location": {"lat": request.location.latitude, "lon": request.location.longitude},
+            "score": workflow["site_analysis"].get("overall_score", 0),
+            "date": datetime.now().isoformat(),
+            "city_name": getattr(request, "city_name", "")  
+        }
+        RECENT_ACTIVITIES.insert(0, activity)  # newest first
+        if len(RECENT_ACTIVITIES) > 10:
+            RECENT_ACTIVITIES.pop()
+
+
+        # --- Return workflow ---
+        return {"success": True, "workflow": workflow}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Full analysis failed: {str(e)}")
+
+
+
+
+
+@app.get("/api/v1/recent-activities")
+async def get_recent_activities():
+    return {"success": True, "activities": RECENT_ACTIVITIES}
+
+
+
+
+
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
