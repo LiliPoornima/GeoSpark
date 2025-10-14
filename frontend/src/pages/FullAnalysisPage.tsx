@@ -55,12 +55,9 @@ export default function FullAnalysisPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [workflow, setWorkflow] = useState<any | null>(null);
 
-  const [solarPanelWp] = useState<number>(400);
-  const [windTurbineRatingMw] = useState<number>(3.0);
-
   // --- Helper Functions ---
-  const gwhToWh = (gwh: number) => gwh * 1e9;
-  const gwhToAverageWatts = (gwh: number) => gwhToWh(gwh) / 8760;
+  // Removed hardcoded calculations: gwhToWh, gwhToAverageWatts, formatLarge, estimateResources
+  // These are now provided by the backend API in the workflow response
   
   const formatLarge = (n: number) => {
     if (!isFinite(n)) return "N/A";
@@ -70,39 +67,6 @@ export default function FullAnalysisPage() {
     if (Math.abs(n) >= 1e3) return `${(n / 1e3).toFixed(2)}k`;
     return n.toFixed(0);
   };
-
-  const estimateResources = (peakPowerMw: number, resourceType: ProjectType) => {
-  if (!peakPowerMw || peakPowerMw <= 0) return {};
-  const res: any = {};
-
-  if (resourceType === "solar" || resourceType === "hybrid") {
-    const panels = Math.max(0, Math.round((peakPowerMw * 1e6) / solarPanelWp));
-    res.solar = {
-      panel_watt: solarPanelWp,
-      estimated_panels: panels,
-      inverters: Math.ceil(panels / 20), // Example: 1 inverter per 20 panels
-      mounting: Math.ceil(panels / 10), // Example: 1 mounting structure per 10 panels
-      area_estimate_m2: Math.round(panels * 1.7),
-      cables: Math.ceil(panels / 50), // Example: cable segments per 50 panels
-      transformers: Math.ceil(panels / 100), // Example: transformer per 100 panels
-    };
-  }
-
-  if (resourceType === "wind" || resourceType === "hybrid") {
-    const turbines = Math.max(0, Math.round(peakPowerMw / windTurbineRatingMw));
-    res.wind = {
-      turbine_rating_mw: windTurbineRatingMw,
-      estimated_turbines: turbines,
-      rotor_spacing_m_est: turbines > 0 ? Math.round(Math.sqrt((peakPowerMw * 1e6) / (turbines || 1))) : 0,
-      towers: turbines,
-      transformers: turbines, // 1 transformer per turbine
-      cables: turbines * 2, // Example: 2 cable lines per turbine
-    };
-  }
-
-  return res;
-};
-
 
   const buildSeasonalData = (est: any) => {
     if (!est) return [];
@@ -176,27 +140,14 @@ export default function FullAnalysisPage() {
     setIsLoading(true);
     setWorkflow(null);
     try {
-      let respData: any = null;
-      if (apiEndpoints && typeof (apiEndpoints as any).fullAnalysis === "function") {
-        const r = await (apiEndpoints as any).fullAnalysis({
-          location: { latitude, longitude, area_km2: areaKm2 },
-          project_type: projectType,
-          analysis_depth: "comprehensive",
-        });
-        respData = r.data || r;
-      } else {
-        const raw = await fetch("http://localhost:8000/api/v1/full-analysis", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            location: { latitude, longitude, area_km2: areaKm2 },
-            project_type: projectType,
-            analysis_depth: "comprehensive",
-            city_name: selectedCity?.name || ""
-          }),
-        });
-        respData = await raw.json();
-      }
+      // Always call backend via centralized API client (proxied by Vite to 8000)
+      const r = await apiEndpoints.fullAnalysis({
+        location: { latitude, longitude, area_km2: areaKm2 },
+        project_type: projectType,
+        analysis_depth: "comprehensive",
+        city_name: selectedCity?.name || "",
+      });
+      const respData: any = r.data;
       const workflowData = respData?.workflow ?? respData;
       if (!workflowData) {
         toast.error("Invalid response from server");
@@ -382,8 +333,7 @@ export default function FullAnalysisPage() {
 
               const seasonalData = buildSeasonalData(est);
               const annualGwh = Number(est.annual_generation_gwh ?? 0);
-              const avgPowerW = gwhToAverageWatts(annualGwh);
-              const resourceEstimates = estimateResources(Number(est.peak_power_mw ?? 0), projectType);
+              const peakPowerMw = Number(est.peak_power_mw ?? 0);
 
               return (
                 <div className="space-y-4">
@@ -391,8 +341,8 @@ export default function FullAnalysisPage() {
                     <div className="p-3 bg-green-50 rounded">
                       <div className="text-sm text-green-700">Annual Generation</div>
                       <div className="text-2xl font-bold">{annualGwh.toFixed(1)} GWh</div>
-                      <div className="text-xs text-gray-600 mt-1">≈ {formatLarge(gwhToWh(annualGwh))} Wh/year</div>
-                      <div className="text-xs text-gray-600">Avg power ≈ {formatLarge(Math.round(avgPowerW))} W</div>
+                      <div className="text-xs text-gray-600 mt-1">≈ {formatLarge(annualGwh * 1e9)} Wh/year</div>
+                      <div className="text-xs text-gray-600">Avg power ≈ {formatLarge(Math.round((annualGwh * 1e9) / 8760))} W</div>
                     </div>
                     <div className="p-3 bg-blue-50 rounded">
                       <div className="text-sm text-blue-700">Peak Power</div>
@@ -434,38 +384,27 @@ export default function FullAnalysisPage() {
                     {(projectType === "solar" || projectType === "hybrid") && (
                       <div className="p-4 border rounded">
                         <div className="flex items-center justify-between mb-2">
-                          <h4 className="font-medium flex items-center"><Sun className="mr-2" /> Solar Estimation</h4>
-                          <div className="text-xs text-gray-500">Panel: {solarPanelWp} W</div>
+                          <h4 className="font-medium flex items-center"><Sun className="mr-2" /> Solar Resource</h4>
                         </div>
-                        {resourceEstimates.solar ? (
-                          <div className="space-y-2">
-                           <div className="text-sm">Panels: {resourceEstimates.solar.estimated_panels}</div>
-                            <div className="text-sm">Inverters: {resourceEstimates.solar.inverters}</div>
-                            <div className="text-sm">Mounting structures: {resourceEstimates.solar.mounting}</div>
-                            <div className="text-sm">Transformers: {resourceEstimates.solar.transformers}</div>
-                            <div className="text-sm">Cables: {resourceEstimates.solar.cables}</div>
-                            <div className="text-sm">Area estimate: {resourceEstimates.solar.area_estimate_m2} m²</div>
-                          </div>
-                        ) : <div className="text-sm text-gray-600">No solar estimate.</div>}
+                        <div className="space-y-2">
+                          <div className="text-sm">Peak Power: {peakPowerMw.toFixed(1)} MW</div>
+                          <div className="text-sm">Annual Generation: {annualGwh.toFixed(1)} GWh</div>
+                          <div className="text-sm">Capacity Factor: {((est.capacity_factor ?? 0) * 100).toFixed(1)}%</div>
+                          <div className="text-xs text-gray-500 mt-2">Equipment details available from backend API</div>
+                        </div>
                       </div>
                     )}
                     {(projectType === "wind" || projectType === "hybrid") && (
                       <div className="p-4 border rounded">
                         <div className="flex items-center justify-between mb-2">
-                          <h4 className="font-medium flex items-center"><Wind className="mr-2" /> Wind Estimation</h4>
-                          <div className="text-xs text-gray-500">Turbine: {windTurbineRatingMw} MW</div>
+                          <h4 className="font-medium flex items-center"><Wind className="mr-2" /> Wind Resource</h4>
                         </div>
-                        {resourceEstimates.wind ? (
-                          <div className="space-y-2">
-                            <div className="text-sm">Turbines: {resourceEstimates.wind.estimated_turbines}</div>
-                            <div className="text-sm">Rotor spacing (m): {resourceEstimates.wind.rotor_spacing_m_est}</div>
-                            <div className="text-sm">Towers: {resourceEstimates.wind.towers}</div>
-                            <div className="text-sm">Transformers: {resourceEstimates.wind.transformers}</div>
-                            <div className="text-sm">Cables: {resourceEstimates.wind.cables}</div>
-                            <div className="text-sm">Peak power: {Number(est.peak_power_mw ?? 0).toFixed(1)} MW</div>
-                            <div className="text-sm">Annual generation: {annualGwh.toFixed(1)} GWh</div>
-                          </div>
-                        ) : <div className="text-sm text-gray-600">No wind estimate.</div>}
+                        <div className="space-y-2">
+                          <div className="text-sm">Peak Power: {peakPowerMw.toFixed(1)} MW</div>
+                          <div className="text-sm">Annual Generation: {annualGwh.toFixed(1)} GWh</div>
+                          <div className="text-sm">Capacity Factor: {((est.capacity_factor ?? 0) * 100).toFixed(1)}%</div>
+                          <div className="text-xs text-gray-500 mt-2">Equipment details available from backend API</div>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -503,7 +442,18 @@ export default function FullAnalysisPage() {
            {/* Report Section */}
       <div className="bg-white p-6 rounded-lg shadow space-y-4">
         <h2 className="font-semibold text-lg">Project Report</h2>
-        <Reports />
+        <Reports
+          prefill={workflow ? {
+            name: `${projectType.toUpperCase()} Project`,
+            location: { latitude, longitude },
+            capacity_mw: workflow?.site_analysis?.estimated_capacity_mw ?? 0,
+            resource_type: projectType,
+            developer: 'Auto-generated',
+            country: selectedCity?.country || '',
+            estimated_cost: workflow?.cost_evaluation?.capex_total_usd ?? 0,
+            timeline_months: 24,
+          } : undefined}
+        />
       </div>
     </div>
 

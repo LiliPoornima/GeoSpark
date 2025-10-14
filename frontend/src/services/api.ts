@@ -43,6 +43,18 @@ export const apiEndpoints = {
   register: (data: { username: string; email: string; password: string }) =>
     api.post('/register', data),
 
+  // Site Analysis
+  analyzeSite: (data: any) =>
+    api.post('/site-analysis', data),
+  
+  // Resource Estimation
+  estimateResources: (data: any) =>
+    api.post('/resource-estimation', data),
+  
+  // Cost Evaluation
+  evaluateCosts: (data: any) =>
+    api.post('/cost-evaluation', data),
+  
   // Text Analysis
   analyzeText: (data: { text: string; analysis_type?: string }) =>
     api.post('/text-analysis', data),
@@ -62,4 +74,26 @@ export const apiEndpoints = {
   // Agent chat
   agentChat: (data: { message: string; city?: string; resource_type?: string }) =>
     api.post('/agent-chat', data),
+
+  // Comprehensive Report
+  comprehensiveReport: (data: {
+    project_name: string;
+    location: { latitude: number; longitude: number };
+    resource_type: string;
+    capacity_mw: number;
+    developer: string;
+    country: string;
+    report_type: string;
+    estimated_cost: number;
+    timeline_months: number;
+  }) =>
+    api.post('/comprehensive-report', data),
+
+  // Full workflow analysis (site + resources + cost + report summary)
+  fullAnalysis: (data: {
+    location: { latitude: number; longitude: number; area_km2: number };
+    project_type: string;
+    analysis_depth?: string;
+    city_name?: string;
+  }) => api.post('/full-analysis', data),
 }

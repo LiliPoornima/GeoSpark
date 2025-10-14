@@ -35,17 +35,42 @@ ChartJS.register(
   Legend
 )
 
-export function Reports() {
+type ReportsPrefill = {
+  name?: string
+  location?: { latitude: number; longitude: number }
+  capacity_mw?: number
+  resource_type?: string
+  developer?: string
+  country?: string
+  estimated_cost?: number
+  timeline_months?: number
+}
+
+export function Reports({ prefill }: { prefill?: ReportsPrefill }) {
+  // Initialize with minimal placeholders; will be replaced by prefill when provided
   const [projectData, setProjectData] = useState({
-    name: 'Solar Farm Project',
-    location: { latitude: 7.2931, longitude: 80.6350 },
-    capacity_mw: 100,
-    resource_type: 'solar',
-    developer: 'Green Energy Corp',
-    country: 'Sri Lanka',
-    estimated_cost: 120000000,
-    timeline_months: 24
+    name: prefill?.name || '',
+    location: prefill?.location || { latitude: 0, longitude: 0 },
+    capacity_mw: prefill?.capacity_mw ?? 0,
+    resource_type: prefill?.resource_type || 'solar',
+    developer: prefill?.developer || '',
+    country: prefill?.country || '',
+    estimated_cost: prefill?.estimated_cost ?? 0,
+    timeline_months: prefill?.timeline_months ?? 0,
   })
+
+  // Apply prefill when it changes (e.g., after Full Analysis completes)
+  useEffect(() => {
+    if (!prefill) return
+    setProjectData(prev => ({
+      ...prev,
+      ...prefill,
+      location: prefill.location || prev.location,
+      capacity_mw: prefill.capacity_mw ?? prev.capacity_mw,
+      estimated_cost: prefill.estimated_cost ?? prev.estimated_cost,
+      timeline_months: prefill.timeline_months ?? prev.timeline_months,
+    }))
+  }, [prefill])
   
   const [report, setReport] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -667,7 +692,11 @@ export function Reports() {
             <div className="bg-white rounded-lg shadow p-12 text-center">
               <FileText className="h-16 w-16 mx-auto mb-4 text-gray-300" />
               <h3 className="text-lg font-semibold text-gray-900 mb-2">No Report Generated</h3>
-              <p className="text-gray-600 mb-6">Configure your project details and generate a comprehensive report</p>
+              <p className="text-gray-600 mb-6">
+                {projectData.name
+                  ? `Ready to generate a ${projectData.resource_type} report for ${projectData.name} (${projectData.capacity_mw} MW)`
+                  : 'Configure your project details and generate a comprehensive report'}
+              </p>
               <div className="grid grid-cols-2 gap-4 max-w-md mx-auto">
                 <div className="text-center p-4 border-2 border-dashed border-gray-200 rounded-lg bg-gray-50">
                   <BarChart3 className="h-8 w-8 mx-auto mb-2 text-green-600" />

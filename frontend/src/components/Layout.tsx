@@ -20,11 +20,7 @@ export function Layout() {
   const navigation = [
     { name: 'Home', href: '/', icon: Home },
     { name: 'Dashboard', href: '/dashboard', icon: BarChart3 },
-    { name: 'Site Analysis', href: '/site-analysis', icon: MapPin },
-    { name: 'Resource Estimation', href: '/resource-estimation', icon: Zap },
-    { name: 'Cost Evaluation', href: '/cost-evaluation', icon: DollarSign },
-  // If for any reason FileText is undefined (HMR edge), fall back to Home to avoid ReferenceError
-  { name: 'Reports', href: '/reports', icon: (typeof FileText !== 'undefined' ? (FileText as any) : Home) },
+    // Removed by request: Site Analysis, Resource Estimation, Cost Evaluation, Reports
     // { name: 'AI Agent', href: '/agent', icon: Zap },
     // { name: 'AI Agent', href: '/chatbot', icon: Zap },
   { name: 'GeoAnalysis', href: '/full-analysis', icon: (typeof FileText !== 'undefined' ? (FileText as any) : Home) },
