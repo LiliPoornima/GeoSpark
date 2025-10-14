@@ -61,6 +61,7 @@ export default function FullAnalysisPage() {
   // --- Helper Functions ---
   const gwhToWh = (gwh: number) => gwh * 1e9;
   const gwhToAverageWatts = (gwh: number) => gwhToWh(gwh) / 8760;
+  
   const formatLarge = (n: number) => {
     if (!isFinite(n)) return "N/A";
     if (Math.abs(n) >= 1e12) return `${(n / 1e12).toFixed(2)}T`;
@@ -71,26 +72,37 @@ export default function FullAnalysisPage() {
   };
 
   const estimateResources = (peakPowerMw: number, resourceType: ProjectType) => {
-    if (!peakPowerMw || peakPowerMw <= 0) return {};
-    const res: any = {};
-    if (resourceType === "solar" || resourceType === "hybrid") {
-      const panels = Math.max(0, Math.round((peakPowerMw * 1e6) / solarPanelWp));
-      res.solar = {
-        panel_watt: solarPanelWp,
-        estimated_panels: panels,
-        area_estimate_m2: Math.round(panels * 1.7),
-      };
-    }
-    if (resourceType === "wind" || resourceType === "hybrid") {
-      const turbines = Math.max(0, Math.round(peakPowerMw / windTurbineRatingMw));
-      res.wind = {
-        turbine_rating_mw: windTurbineRatingMw,
-        estimated_turbines: turbines,
-        rotor_spacing_m_est: turbines > 0 ? Math.round(Math.sqrt((peakPowerMw * 1e6) / (turbines || 1))) : 0,
-      };
-    }
-    return res;
-  };
+  if (!peakPowerMw || peakPowerMw <= 0) return {};
+  const res: any = {};
+
+  if (resourceType === "solar" || resourceType === "hybrid") {
+    const panels = Math.max(0, Math.round((peakPowerMw * 1e6) / solarPanelWp));
+    res.solar = {
+      panel_watt: solarPanelWp,
+      estimated_panels: panels,
+      inverters: Math.ceil(panels / 20), // Example: 1 inverter per 20 panels
+      mounting: Math.ceil(panels / 10), // Example: 1 mounting structure per 10 panels
+      area_estimate_m2: Math.round(panels * 1.7),
+      cables: Math.ceil(panels / 50), // Example: cable segments per 50 panels
+      transformers: Math.ceil(panels / 100), // Example: transformer per 100 panels
+    };
+  }
+
+  if (resourceType === "wind" || resourceType === "hybrid") {
+    const turbines = Math.max(0, Math.round(peakPowerMw / windTurbineRatingMw));
+    res.wind = {
+      turbine_rating_mw: windTurbineRatingMw,
+      estimated_turbines: turbines,
+      rotor_spacing_m_est: turbines > 0 ? Math.round(Math.sqrt((peakPowerMw * 1e6) / (turbines || 1))) : 0,
+      towers: turbines,
+      transformers: turbines, // 1 transformer per turbine
+      cables: turbines * 2, // Example: 2 cable lines per turbine
+    };
+  }
+
+  return res;
+};
+
 
   const buildSeasonalData = (est: any) => {
     if (!est) return [];
@@ -332,10 +344,15 @@ export default function FullAnalysisPage() {
                   <div className="text-sm text-gray-500">Overall Score</div>
                   <div className="text-2xl font-bold text-green-600">{workflow.site_analysis ? ((workflow.site_analysis.overall_score ?? 0) * 100).toFixed(1) : "N/A"}%</div>
                 </div>
-                <div className="p-3 bg-gray-50 rounded">
-                  <div className="text-sm text-gray-500">Estimated Capacity</div>
-                  <div className="text-2xl font-bold text-blue-600">{workflow.site_analysis ? (workflow.site_analysis.estimated_capacity_mw ?? 0).toFixed(1) : "N/A"} MW</div>
-                </div>
+                <div className="p-3 bg-blue-50 rounded">
+  <div className="text-sm text-blue-700">Estimated Capacity</div>
+  <div className="text-2xl font-bold text-blue-600">
+    {workflow.site_analysis 
+      ? formatLarge((workflow.site_analysis.estimated_capacity_mw ?? 0) * 1e6) 
+      : "N/A"} W
+  </div>
+</div>
+
                 <div className="p-3 bg-gray-50 rounded">
                   <div className="text-sm text-gray-500">Accessibility / Environmental</div>
                   <div className="text-lg font-semibold text-gray-700">{workflow.site_analysis ? `${Math.round((workflow.site_analysis.accessibility_score ?? 0) * 100)}% / ${Math.round((workflow.site_analysis.environmental_score ?? 0) * 100)}%` : "N/A"}</div>
@@ -421,10 +438,12 @@ export default function FullAnalysisPage() {
                         </div>
                         {resourceEstimates.solar ? (
                           <div className="space-y-2">
-                            <div className="text-sm">Estimated panels: <span className="font-semibold">{resourceEstimates.solar.estimated_panels.toLocaleString()}</span></div>
-                            <div className="text-sm">Estimated area (m²): <span className="font-semibold">{resourceEstimates.solar.area_estimate_m2.toLocaleString()}</span></div>
-                            <div className="text-sm">Avg power (W): <span className="font-semibold">{formatLarge(Math.round(avgPowerW))}</span></div>
-                            <div className="text-sm">Annual generation: <span className="font-semibold">{annualGwh.toFixed(1)} GWh</span></div>
+                           <div className="text-sm">Panels: {resourceEstimates.solar.estimated_panels}</div>
+                            <div className="text-sm">Inverters: {resourceEstimates.solar.inverters}</div>
+                            <div className="text-sm">Mounting structures: {resourceEstimates.solar.mounting}</div>
+                            <div className="text-sm">Transformers: {resourceEstimates.solar.transformers}</div>
+                            <div className="text-sm">Cables: {resourceEstimates.solar.cables}</div>
+                            <div className="text-sm">Area estimate: {resourceEstimates.solar.area_estimate_m2} m²</div>
                           </div>
                         ) : <div className="text-sm text-gray-600">No solar estimate.</div>}
                       </div>
@@ -437,10 +456,13 @@ export default function FullAnalysisPage() {
                         </div>
                         {resourceEstimates.wind ? (
                           <div className="space-y-2">
-                            <div className="text-sm">Estimated turbines: <span className="font-semibold">{resourceEstimates.wind.estimated_turbines}</span></div>
-                            <div className="text-sm">Rotor spacing (m): <span className="font-semibold">{resourceEstimates.wind.rotor_spacing_m_est}</span></div>
-                            <div className="text-sm">Peak power: <span className="font-semibold">{Number(est.peak_power_mw ?? 0).toFixed(1)} MW</span></div>
-                            <div className="text-sm">Annual generation: <span className="font-semibold">{annualGwh.toFixed(1)} GWh</span></div>
+                            <div className="text-sm">Turbines: {resourceEstimates.wind.estimated_turbines}</div>
+                            <div className="text-sm">Rotor spacing (m): {resourceEstimates.wind.rotor_spacing_m_est}</div>
+                            <div className="text-sm">Towers: {resourceEstimates.wind.towers}</div>
+                            <div className="text-sm">Transformers: {resourceEstimates.wind.transformers}</div>
+                            <div className="text-sm">Cables: {resourceEstimates.wind.cables}</div>
+                            <div className="text-sm">Peak power: {Number(est.peak_power_mw ?? 0).toFixed(1)} MW</div>
+                            <div className="text-sm">Annual generation: {annualGwh.toFixed(1)} GWh</div>
                           </div>
                         ) : <div className="text-sm text-gray-600">No wind estimate.</div>}
                       </div>
@@ -476,7 +498,7 @@ export default function FullAnalysisPage() {
             ) : <div className="text-sm text-gray-600">No cost evaluation returned.</div>}
           </div>
 
-          {/* Report Summary */}
+         
            {/* Report Section */}
       <div className="bg-white p-6 rounded-lg shadow space-y-4">
         <h2 className="font-semibold text-lg">Project Report</h2>
