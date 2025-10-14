@@ -1,8 +1,27 @@
-import React from 'react'
+
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
+import React, { useEffect, useState } from 'react'
+import toast from 'react-hot-toast'
 
 export function Dashboard() {
   // Mock data for demonstration
+  const [recentActivities, setRecentActivities] = useState<any[]>([])
+
+  useEffect(() => {
+    async function fetchRecentActivities() {
+      try {
+        const res = await fetch("http://localhost:8000/api/v1/recent-activities")
+        const data = await res.json()
+        if (data.success) setRecentActivities(data.activities)
+      } catch (err) {
+        toast.error("Failed to load recent activities")
+      }
+    }
+
+    fetchRecentActivities()
+    const interval = setInterval(fetchRecentActivities, 30000) // refresh every 30s
+    return () => clearInterval(interval)
+  }, [])
   const projectData = [
     { name: 'Solar', value: 45, count: 120 },
     { name: 'Wind', value: 30, count: 80 },
@@ -131,23 +150,21 @@ export function Dashboard() {
       <div className="bg-white rounded-lg shadow p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Activity</h3>
         <div className="space-y-4">
-          {[
-            { project: 'Solar Farm - Texas', score: 92, date: '2 hours ago' },
-            { project: 'Wind Project - California', score: 88, date: '5 hours ago' },
-            { project: 'Hybrid System - Nevada', score: 85, date: '1 day ago' },
-            { project: 'Solar Installation - Arizona', score: 91, date: '2 days ago' }
-          ].map((activity, index) => (
-            <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-              <div>
-                <p className="font-medium text-gray-900">{activity.project}</p>
-                <p className="text-sm text-gray-600">{activity.date}</p>
-              </div>
-              <div className="text-right">
-                <p className="font-semibold text-green-600">{activity.score}%</p>
-                <p className="text-sm text-gray-600">Score</p>
-              </div>
-            </div>
-          ))}
+          {recentActivities.map((activity, index) => (
+  <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+    <div>
+      <p className="font-medium text-gray-900">{activity.project}</p>
+      {activity.city_name && <p className="text-sm text-gray-500">City: {activity.city_name}</p>}
+      <p className="text-sm text-gray-600">{new Date(activity.date).toLocaleString()}</p>
+    </div>
+    <div className="text-right">
+      <p className="font-semibold text-green-600">{activity.score}%</p>
+      <p className="text-sm text-gray-600">Score</p>
+    </div>
+  </div>
+))}
+
+          {recentActivities.length === 0 && <p className="text-gray-500">No recent activity yet</p>}
         </div>
       </div>
     </div>
