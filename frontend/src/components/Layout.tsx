@@ -4,10 +4,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { 
   Home, 
   BarChart3, 
-  MapPin, 
   Zap, 
-  DollarSign, 
-  FileText,
   LogOut,
   User
 } from 'lucide-react'
@@ -20,13 +17,6 @@ export function Layout() {
   const navigation = [
     { name: 'Home', href: '/', icon: Home },
     { name: 'Dashboard', href: '/dashboard', icon: BarChart3 },
-    { name: 'Site Analysis', href: '/site-analysis', icon: MapPin },
-    { name: 'Resource Estimation', href: '/resource-estimation', icon: Zap },
-    { name: 'Cost Evaluation', href: '/cost-evaluation', icon: DollarSign },
-    { name: 'Reports', href: '/reports', icon: FileText },
-    // { name: 'AI Agent', href: '/agent', icon: Zap },
-    // { name: 'AI Agent', href: '/chatbot', icon: Zap },
-    { name: 'GeoAnalysis', href: '/full-analysis', icon: FileText },
     { name: 'AI Agent', href: '/sparks', icon: Zap },
   ]
 
