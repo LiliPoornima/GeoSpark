@@ -4,10 +4,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { 
   Home, 
   BarChart3, 
-  MapPin, 
   Zap, 
-  DollarSign, 
-  FileText,
   LogOut,
   User
 } from 'lucide-react'
