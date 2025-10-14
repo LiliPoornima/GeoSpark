@@ -26,7 +26,7 @@ export function Layout() {
     { name: 'Reports', href: '/reports', icon: FileText },
     // { name: 'AI Agent', href: '/agent', icon: Zap },
     // { name: 'AI Agent', href: '/chatbot', icon: Zap },
-    { name: 'Full Analysis', href: '/full-analysis', icon: FileText },
+    { name: 'GeoAnalysis', href: '/full-analysis', icon: FileText },
     { name: 'AI Agent', href: '/sparks', icon: Zap },
   ]
 

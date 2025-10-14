@@ -4,6 +4,12 @@ GeoSpark API Server - Enhanced Professional Version
 Run this with: python main.py
 """
 
+# At the top of main.py
+RECENT_ACTIVITIES: list[dict] = []
+
+
+
+
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -117,6 +123,10 @@ class ComprehensiveReportRequest(BaseModel):
     report_type: str = "executive"  # executive, investor, technical, environmental
     estimated_cost: Optional[float] = None
     timeline_months: Optional[int] = None
+
+
+
+    
 
 # Enhanced calculation functions for realistic metrics
 def calculate_realistic_metrics(request: ComprehensiveReportRequest) -> ReportMetrics:
@@ -844,13 +854,27 @@ async def full_analysis(request: SiteAnalysisRequest):
 
         # --- Compose workflow ---
         workflow = {
-        "site_analysis": dict(site_analysis),          # convert Pydantic to dict
-        "resource_estimation": dict(resource_estimation),
-        "cost_evaluation": dict(cost_evaluation),
-        "report_summary": str(report_summary),
+            "site_analysis": dict(site_analysis),          # convert Pydantic to dict
+            "resource_estimation": dict(resource_estimation),
+            "cost_evaluation": dict(cost_evaluation),
+            "report_summary": str(report_summary),
         }
-        return {"success": True, "workflow": workflow}
 
+        # --- Track Recent Activity ---
+        activity = {
+            "project": f"{request.project_type.title()} project",
+            "location": {"lat": request.location.latitude, "lon": request.location.longitude},
+            "score": workflow["site_analysis"].get("overall_score", 0),
+            "date": datetime.now().isoformat(),
+            "city_name": getattr(request, "city_name", "")  
+        }
+        RECENT_ACTIVITIES.insert(0, activity)  # newest first
+        if len(RECENT_ACTIVITIES) > 10:
+            RECENT_ACTIVITIES.pop()
+
+
+        # --- Return workflow ---
+        return {"success": True, "workflow": workflow}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Full analysis failed: {str(e)}")
@@ -858,6 +882,10 @@ async def full_analysis(request: SiteAnalysisRequest):
 
 
 
+
+@app.get("/api/v1/recent-activities")
+async def get_recent_activities():
+    return {"success": True, "activities": RECENT_ACTIVITIES}
 
 
 

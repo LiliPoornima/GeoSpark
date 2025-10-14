@@ -192,6 +192,7 @@ export default function FullAnalysisPage() {
             location: { latitude, longitude, area_km2: areaKm2 },
             project_type: projectType,
             analysis_depth: "comprehensive",
+            city_name: selectedCity?.name || ""
           }),
         });
         respData = await raw.json();
