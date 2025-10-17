@@ -47,13 +47,14 @@ export default function FullAnalysisPage() {
   const [selectedCity, setSelectedCity] = useState<CitySuggestion | null>(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
-  const [latitude, setLatitude] = useState<number>(7.29);
-  const [longitude, setLongitude] = useState<number>(80.63);
-  const [areaKm2, setAreaKm2] = useState<number>(100);
+  const [latitude, setLatitude] = useState<number>(0);
+  const [longitude, setLongitude] = useState<number>(0);
+  const [areaKm2, setAreaKm2] = useState<number>(0);
   const [projectType, setProjectType] = useState<ProjectType>("solar");
 
   const [isLoading, setIsLoading] = useState(false);
   const [workflow, setWorkflow] = useState<any | null>(null);
+  const [mapType, setMapType] = useState<'street' | 'satellite'>('street');
 
   // --- Helper Functions ---
   // Removed hardcoded calculations: gwhToWh, gwhToAverageWatts, formatLarge, estimateResources
@@ -237,15 +238,33 @@ export default function FullAnalysisPage() {
 
         <div>
           <label className="block text-sm font-medium text-gray-700">Latitude</label>
-          <input type="number" value={latitude} onChange={(e) => setLatitude(parseFloat(e.target.value))} className="w-full border rounded p-2" />
+          <input 
+            type="number" 
+            value={latitude || ''} 
+            onChange={(e) => setLatitude(parseFloat(e.target.value) || 0)} 
+            placeholder="e.g., 7.29"
+            className="w-full border rounded p-2" 
+          />
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700">Longitude</label>
-          <input type="number" value={longitude} onChange={(e) => setLongitude(parseFloat(e.target.value))} className="w-full border rounded p-2" />
+          <input 
+            type="number" 
+            value={longitude || ''} 
+            onChange={(e) => setLongitude(parseFloat(e.target.value) || 0)} 
+            placeholder="e.g., 80.63"
+            className="w-full border rounded p-2" 
+          />
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700">Area (km²)</label>
-          <input type="number" value={areaKm2} onChange={(e) => setAreaKm2(parseFloat(e.target.value))} className="w-full border rounded p-2" />
+          <input 
+            type="number" 
+            value={areaKm2 || ''} 
+            onChange={(e) => setAreaKm2(parseFloat(e.target.value) || 0)} 
+            placeholder="e.g., 100"
+            className="w-full border rounded p-2" 
+          />
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700">Project Type</label>
@@ -271,10 +290,35 @@ export default function FullAnalysisPage() {
           {/* Map + Site */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="bg-white rounded-lg shadow p-4 lg:col-span-1">
-              <h2 className="font-semibold mb-2 flex items-center"><MapIcon className="mr-2" /> Selected Site</h2>
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="font-semibold flex items-center"><MapIcon className="mr-2" /> Selected Site</h2>
+                <div className="flex gap-1 text-xs">
+                  <button
+                    onClick={() => setMapType('street')}
+                    className={`px-2 py-1 rounded ${mapType === 'street' ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-700'}`}
+                  >
+                    Street
+                  </button>
+                  <button
+                    onClick={() => setMapType('satellite')}
+                    className={`px-2 py-1 rounded ${mapType === 'satellite' ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-700'}`}
+                  >
+                    Satellite
+                  </button>
+                </div>
+              </div>
               <div className="h-56 rounded overflow-hidden">
                 <MapContainer center={[latitude, longitude]} zoom={10} style={{ height: "100%", width: "100%" }}>
-                  <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                  <TileLayer 
+                    url={mapType === 'satellite' 
+                      ? "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                      : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    }
+                    attribution={mapType === 'satellite'
+                      ? '&copy; <a href="https://www.esri.com/">Esri</a>'
+                      : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                    }
+                  />
                   <Marker position={[latitude, longitude]}>
                     <Popup>
                       <div className="text-sm">
@@ -439,25 +483,30 @@ export default function FullAnalysisPage() {
           </div>
 
          
+         
            {/* Report Section */}
-      <div className="bg-white p-6 rounded-lg shadow space-y-4">
-        <h2 className="font-semibold text-lg">Project Report</h2>
+      <div className="bg-white p-6 rounded-lg shadow-md space-y-4">
+        <div className="border-b border-gray-200 pb-3">
+          <h2 className="font-bold text-xl text-gray-800 flex items-center">
+            <FileText className="mr-2 text-green-600" size={24} />
+            Project Report Generation
+          </h2>
+          <p className="text-sm text-gray-600 mt-1">Fill in project details to generate comprehensive reports</p>
+        </div>
         <Reports
           prefill={workflow ? {
-            name: `${projectType.toUpperCase()} Project`,
+            name: '',
             location: { latitude, longitude },
             capacity_mw: workflow?.site_analysis?.estimated_capacity_mw ?? 0,
             resource_type: projectType,
-            developer: 'Auto-generated',
+            developer: '',
             country: selectedCity?.country || '',
             estimated_cost: workflow?.cost_evaluation?.capex_total_usd ?? 0,
             timeline_months: 24,
           } : undefined}
         />
       </div>
-    </div>
-
-      ) : (
+    </div>      ) : (
         <div className="bg-white rounded-lg shadow p-6 text-center text-gray-500">
           <MapPin className="mx-auto mb-4" />
           <p>Fill the form above and click "Run Full Analysis" to generate site, resource, cost and report outputs in one workflow.</p>
