@@ -4,6 +4,7 @@ import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
 import L from 'leaflet'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts'
 import { apiEndpoints } from '../services/api'
+import { checkProtectedArea, buildProtectedDisclaimer } from '../services/protectedAreas'
 import toast from 'react-hot-toast'
 import 'leaflet/dist/leaflet.css'
 
@@ -123,6 +124,24 @@ export function ResourceEstimation() {
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    // Pre-check for protected areas and warn
+    try {
+      const lat = parseFloat(formData.latitude)
+      const lon = parseFloat(formData.longitude)
+      if (isFinite(lat) && isFinite(lon)) {
+        const { isProtected, names } = await checkProtectedArea(lat, lon)
+        if (isProtected) {
+          const disclaimer = buildProtectedDisclaimer(names)
+          const confirmed = window.confirm(disclaimer)
+          if (!confirmed) {
+            return
+          }
+        }
+      }
+    } catch (_err) {
+      // Fail open
+    }
+
     setIsLoading(true)
 
     try {

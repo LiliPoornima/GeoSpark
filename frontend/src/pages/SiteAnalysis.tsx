@@ -3,6 +3,7 @@ import { MapPin, Zap, DollarSign, BarChart3, TrendingUp, AlertTriangle, Search, 
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
 import L from 'leaflet'
 import { apiEndpoints } from '../services/api'
+import { checkProtectedArea, buildProtectedDisclaimer } from '../services/protectedAreas'
 import toast from 'react-hot-toast'
 import 'leaflet/dist/leaflet.css'
 
@@ -120,6 +121,24 @@ function SiteAnalysis() {
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    // Pre-check for protected areas and warn user
+    try {
+      const lat = parseFloat(formData.latitude)
+      const lon = parseFloat(formData.longitude)
+      if (isFinite(lat) && isFinite(lon)) {
+        const { isProtected, names } = await checkProtectedArea(lat, lon)
+        if (isProtected) {
+          const disclaimer = buildProtectedDisclaimer(names)
+          const confirmed = window.confirm(disclaimer)
+          if (!confirmed) {
+            return
+          }
+        }
+      }
+    } catch (_err) {
+      // Fail open: continue if the pre-check fails
+    }
+
     setIsLoading(true)
 
     try {

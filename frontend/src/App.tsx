@@ -4,11 +4,13 @@ import { AuthProvider } from './contexts/AuthContext'
 import { Layout } from './components/Layout'
 import { Home } from './pages/Home'
 // Dynamic lazy element to avoid stale bindings during HMR
-const LazySiteAnalysisElement = (
-  <React.Suspense fallback={<div style={{ padding: 24 }}>Loading Site Analysis...</div>}>
-    {React.createElement(React.lazy(() => import('./pages/SiteAnalysis')))}
-  </React.Suspense>
-)
+// const LazySiteAnalysisElement = (
+//   <React.Suspense fallback={<div style={{ padding: 24 }}>Loading Site Analysis...</div>}>
+//     {React.createElement(React.lazy(() => import('./pages/SiteAnalysis')))}
+//   </React.Suspense>
+// )
+const SiteAnalysis = React.lazy(() => import('./pages/SiteAnalysis'))
+
 import { ResourceEstimation } from './pages/ResourceEstimation'
 import { CostEvaluation } from './pages/CostEvaluation'
 import {Reports}from './pages/Reports'
@@ -20,7 +22,7 @@ import { Dashboard } from './pages/Dashboard'
 import SparksChat from './pages/SparksChat'
 import FullAnalysisPage from "./pages/FullAnalysisPage";
 
-
+  
 function App() {
   // Expose a small debug flag to verify this build is loaded in the browser
   ;(globalThis as any).__APP_DEBUG__ = {
@@ -36,7 +38,15 @@ function App() {
         <Route path="/" element={<Layout />}>
           <Route index element={<Home />} />
           <Route path="dashboard" element={<Dashboard />} />
-          <Route path="site-analysis" element={LazySiteAnalysisElement} />
+          {/* <Route path="site-analysis" element={LazySiteAnalysisElement} /> */}
+          <Route
+            path="site-analysis"
+            element={
+              <Suspense fallback={<div style={{ padding: 24 }}>Loading Site Analysis...</div>}>
+                <SiteAnalysis />
+              </Suspense>
+          }
+          />
           <Route path="resource-estimation" element={<ResourceEstimation />} />
           <Route path="cost-evaluation" element={<CostEvaluation />} />
           <Route path="reports" element={<Reports />} />
