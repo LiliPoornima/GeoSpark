@@ -247,3 +247,5 @@ If you'd like, I can:
 - Generate a short PowerPoint summarizing the project
 
 Please tell me which of these you'd like next.
+cd C:\Users\User\Documents\GitHub\GeoSpark
+& 'C:\Users\User\AppData\Local\Programs\Python\Python313\python.exe' -m uvicorn main:app --reload --host 127.0.0.1 --port 8000
