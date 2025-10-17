@@ -75,6 +75,12 @@ class SiteAnalysisResult:
     risks: List[str]
     estimated_capacity_mw: float
     analysis_timestamp: datetime
+    # Protected land flags
+    protected_overlap: bool
+    protected_nearby_km: Optional[float]
+    protected_features: List[Dict[str, Any]]
+    # Suitability status based on constraints
+    suitability: str  # 'suitable' | 'caution' | 'unsuitable'
 
 class MockLLMService:
     """Mock LLM service for demo purposes"""
@@ -218,6 +224,130 @@ class GeoSparkDemo:
         regulatory_score = random.uniform(0.5, 0.9)
         accessibility_score = random.uniform(0.7, 0.95)
         
+        # Simple protected areas check via Overpass (OpenStreetMap)
+        # We look for nature reserve/protected areas within ~2km radius
+        protected_overlap = False
+        protected_nearby_km: Optional[float] = None
+        protected_features: List[Dict[str, Any]] = []
+        try:
+            import httpx
+            # Radius in meters (wider radius improves detection for large reserves)
+            radius_m = 25000
+            overpass_q = (
+                f"[out:json][timeout:20];"
+                f"("
+                f"  nwr[boundary=protected_area](around:{radius_m},{lat},{lng});"
+                f"  nwr[leisure=nature_reserve](around:{radius_m},{lat},{lng});"
+                f"  nwr[boundary=national_park](around:{radius_m},{lat},{lng});"
+                f"  nwr[protect_class](around:{radius_m},{lat},{lng});"
+                f"  nwr[protection_title](around:{radius_m},{lat},{lng});"
+                f"  nwr[protect_title](around:{radius_m},{lat},{lng});"
+                f");"
+                f"out center qt;"
+            )
+            headers = {"User-Agent": "GeoSpark-Demo/1.0 (contact: demo@example.com)"}
+            endpoints = [
+                "https://overpass-api.de/api/interpreter",
+                "https://overpass.kumi.systems/api/interpreter",
+                "https://lz4.overpass-api.de/api/interpreter",
+            ]
+            elements: List[Dict[str, Any]] = []
+            async with httpx.AsyncClient(timeout=20, headers=headers) as client:
+                for ep in endpoints:
+                    try:
+                        resp = await client.get(ep, params={"data": overpass_q})
+                        if resp.status_code == 200:
+                            data = resp.json()
+                            elements = data.get("elements", [])
+                            if elements:
+                                break
+                    except Exception:
+                        continue
+                # Fallback: use is_in to find protected polygons containing the point
+                if not elements:
+                    is_in_q = (
+                        f"[out:json][timeout:20];"
+                        f"is_in({lat},{lng})->.a;"
+                        f"area.a[boundary=protected_area];"
+                        f"rel(area);out center qt;"
+                    )
+                    for ep in endpoints:
+                        try:
+                            resp = await client.get(ep, params={"data": is_in_q})
+                            if resp.status_code == 200:
+                                data = resp.json()
+                                elements = data.get("elements", [])
+                                if elements:
+                                    break
+                        except Exception:
+                            continue
+            for el in elements[:50]:
+                tags = el.get("tags", {})
+                name = tags.get("name") or tags.get("protect_title") or "Protected Area"
+                # Compute rough distance if center provided
+                center = el.get("center") or {"lat": el.get("lat"), "lon": el.get("lon")}
+                d_km = None
+                if center and center.get("lat") is not None and center.get("lon") is not None:
+                    d_km = self._haversine_km(lat, lng, center["lat"], center["lon"])
+                    if protected_nearby_km is None or (d_km is not None and d_km < protected_nearby_km):
+                        protected_nearby_km = d_km
+                protected_features.append({
+                    "id": el.get("id"),
+                    "type": el.get("type"),
+                    "name": name,
+                    "distance_km": d_km,
+                    "tags": tags
+                })
+            protected_overlap = len(elements) > 0
+        except Exception:
+            # Network or API failure shouldn't break analysis in demo
+            pass
+
+        # Secondary fallback: Nominatim reverse-geocoding keyword screening
+        if not protected_overlap:
+            try:
+                import httpx
+                headers = {"User-Agent": "GeoSpark-Demo/1.0 (contact: demo@example.com)"}
+                async with httpx.AsyncClient(timeout=12, headers=headers) as client:
+                    r = await client.get(
+                        "https://nominatim.openstreetmap.org/reverse",
+                        params={"format": "json", "lat": lat, "lon": lng, "zoom": 14, "addressdetails": 1},
+                    )
+                    if r.status_code == 200:
+                        j = r.json()
+                        text = (j.get("display_name") or "").lower()
+                        cats = [j.get("category", ""), j.get("type", ""), j.get("addresstype", "")]
+                        keywords = [
+                            "national park", "forest reserve", "nature reserve", "protected area",
+                            "wildlife reserve", "conservation", "sanctuary", "biosphere"
+                        ]
+                        if any(k in text for k in keywords) or any(k in (c or "") for c in cats for k in ["park", "reserve", "forest", "protected", "conservation"]):
+                            protected_overlap = True
+                            name = j.get("name") or (j.get("address", {}) or {}).get("suburb") or "Protected Area"
+                            protected_features.append({
+                                "id": None,
+                                "type": j.get("type"),
+                                "name": name,
+                                "distance_km": 0.0,
+                                "tags": {"source": "nominatim"}
+                            })
+                            protected_nearby_km = 0.0 if protected_nearby_km is None else protected_nearby_km
+            except Exception:
+                pass
+
+        # If protected area detected, degrade environmental score and mark suitability
+        suitability = "suitable"
+        if protected_overlap:
+            environmental_score = min(environmental_score, 0.3)
+            risks.append("Site intersects or is adjacent to protected land; development likely restricted.")
+            # Strengthen recommendation to avoid development
+            recommendations = [
+                "Do not proceed with development due to protected-area constraints.",
+                "Engage environmental authorities to confirm legal boundaries and restrictions.",
+                "Consider alternative sites outside protected or conservation zones."
+            ] + recommendations
+            suitability = "unsuitable"
+
         # Overall score
         if request.project_type == "solar":
             overall_score = (solar_score + environmental_score + regulatory_score + accessibility_score) / 4
@@ -258,13 +388,29 @@ class GeoSparkDemo:
             recommendations=recommendations,
             risks=risks,
             estimated_capacity_mw=estimated_capacity_mw,
-            analysis_timestamp=datetime.now()
+            analysis_timestamp=datetime.now(),
+            protected_overlap=protected_overlap,
+            protected_nearby_km=protected_nearby_km,
+            protected_features=protected_features,
+            suitability=suitability
         )
         
         # Store in history
         self.analysis_history.append(result)
         
         return result
+
+    @staticmethod
+    def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+        # Calculate great-circle distance in kilometers
+        R = 6371.0
+        phi1 = math.radians(lat1)
+        phi2 = math.radians(lat2)
+        dphi = math.radians(lat2 - lat1)
+        dlambda = math.radians(lon2 - lon1)
+        a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2)**2
+        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+        return R * c
     
     async def analyze_text(self, text: str, analysis_type: str = "general") -> Dict[str, Any]:
         """Analyze text using NLP"""

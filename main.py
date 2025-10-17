@@ -133,7 +133,12 @@ async def analyze_site(request: SiteAnalysisRequest):
                 "recommendations": result.recommendations,
                 "risks": result.risks,
                 "estimated_capacity_mw": result.estimated_capacity_mw,
-                "analysis_timestamp": result.analysis_timestamp.isoformat()
+                "analysis_timestamp": result.analysis_timestamp.isoformat(),
+                # Protected area flags from demo
+                "protected_overlap": getattr(result, "protected_overlap", False),
+                "protected_nearby_km": getattr(result, "protected_nearby_km", None),
+                "protected_features": getattr(result, "protected_features", []),
+                "suitability": getattr(result, "suitability", "suitable"),
             }
         }
     except Exception as e:

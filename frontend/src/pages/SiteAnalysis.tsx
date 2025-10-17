@@ -39,6 +39,17 @@ interface SiteAnalysisResult {
   recommendations: string[]
   risks: string[]
   estimated_capacity_mw: number
+  // Protected area flags
+  protected_overlap?: boolean
+  protected_nearby_km?: number | null
+  protected_features?: Array<{
+    id?: number
+    type?: string
+    name?: string
+    distance_km?: number | null
+    tags?: Record<string, string>
+  }>
+  suitability?: 'suitable' | 'caution' | 'unsuitable'
 }
 
 interface CitySuggestion {
@@ -63,6 +74,7 @@ export function SiteAnalysis() {
   const [result, setResult] = useState<SiteAnalysisResult | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isSearchingCity, setIsSearchingCity] = useState(false)
+  const [showProtectedDisclaimer, setShowProtectedDisclaimer] = useState(false)
 
   // Geocoding function using OpenStreetMap Nominatim API
   const searchCities = async (query: string) => {
@@ -123,20 +135,34 @@ export function SiteAnalysis() {
     setIsLoading(true)
 
     try {
+      const lat = parseFloat(formData.latitude)
+      const lon = parseFloat(formData.longitude)
+      const area = parseFloat(formData.area_km2)
+
+      if (
+        Number.isNaN(lat) || Number.isNaN(lon) || Number.isNaN(area) ||
+        lat < -90 || lat > 90 || lon < -180 || lon > 180 || area <= 0
+      ) {
+        setIsLoading(false)
+        toast.error('Please enter valid latitude, longitude, and area values.')
+        return
+      }
+
       const response = await apiEndpoints.analyzeSite({
-        location: {
-          latitude: parseFloat(formData.latitude),
-          longitude: parseFloat(formData.longitude),
-          area_km2: parseFloat(formData.area_km2)
-        },
+        location: { latitude: lat, longitude: lon, area_km2: area },
         project_type: formData.project_type,
         analysis_depth: 'comprehensive'
       })
 
-      setResult(response.data.analysis)
-      toast.success('Site analysis completed!')
-    } catch (error) {
-      toast.error('Analysis failed. Please try again.')
+      if (response.data?.success && response.data?.analysis) {
+        setResult(response.data.analysis)
+        toast.success('Site analysis completed!')
+      } else {
+        throw new Error(response.data?.message || 'Analysis failed')
+      }
+    } catch (error: any) {
+      const serverMsg = error?.response?.data?.detail || error?.response?.data?.message || error?.message
+      toast.error(`Analysis failed: ${serverMsg || 'Please try again.'}`)
     } finally {
       setIsLoading(false)
     }
@@ -157,6 +183,13 @@ export function SiteAnalysis() {
     document.addEventListener('click', handleClickOutside)
     return () => document.removeEventListener('click', handleClickOutside)
   }, [])
+
+  // Open eye-catching disclaimer modal when protected land detected
+  useEffect(() => {
+    if (result?.protected_overlap) {
+      setShowProtectedDisclaimer(true)
+    }
+  }, [result?.protected_overlap])
 
   return (
     <div className="space-y-6">
@@ -335,6 +368,124 @@ export function SiteAnalysis() {
           
           {result ? (
             <div className="space-y-4">
+              {/* Suitability Badge */}
+              {result.suitability && (
+                <div className="flex items-center justify-between">
+                  <div className="text-sm text-gray-600">Site Suitability</div>
+                  <span
+                    className={
+                      result.suitability === 'unsuitable'
+                        ? 'px-2 py-1 rounded text-xs font-semibold bg-red-100 text-red-700'
+                        : result.suitability === 'caution'
+                        ? 'px-2 py-1 rounded text-xs font-semibold bg-yellow-100 text-yellow-700'
+                        : 'px-2 py-1 rounded text-xs font-semibold bg-green-100 text-green-700'
+                    }
+                  >
+                    {result.suitability.charAt(0).toUpperCase() + result.suitability.slice(1)}
+                  </span>
+                </div>
+              )}
+              {/* Protected Area Warning */}
+              {result.protected_overlap && (
+                <div className="rounded-md bg-red-50 border border-red-200 p-4">
+                  <div className="flex">
+                    <AlertTriangle className="h-5 w-5 text-red-600 mr-2 mt-0.5" />
+                    <div>
+                      <div className="font-semibold text-red-800">Protected Area Detected Nearby</div>
+                      <div className="text-sm text-red-700">
+                        This location overlaps or is within {result.protected_nearby_km?.toFixed(2) ?? 'N/A'} km of a protected area.
+                        Development may be restricted and require special permits.
+                      </div>
+                      {result.protected_features && result.protected_features.length > 0 && (
+                        <div className="mt-2">
+                          <div className="text-xs font-medium text-red-800 mb-1">Nearby protected features:</div>
+                          <ul className="text-xs text-red-700 list-disc pl-5 space-y-0.5">
+                            {result.protected_features.slice(0, 5).map((f, idx) => (
+                              <li key={idx}>
+                                {f.name || 'Protected Area'}{typeof f.distance_km === 'number' ? ` (${f.distance_km.toFixed(2)} km)` : ''}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Eye-catching Disclaimer Modal */}
+              {showProtectedDisclaimer && result.protected_overlap && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center">
+                  {/* Backdrop */}
+                  <div className="absolute inset-0 bg-black bg-opacity-50" onClick={() => setShowProtectedDisclaimer(false)}></div>
+                  {/* Modal */}
+                  <div className="relative z-10 max-w-xl w-11/12 rounded-lg overflow-hidden shadow-2xl">
+                    <div className="bg-gradient-to-r from-red-600 to-red-500 text-white p-4 flex items-center">
+                      <AlertTriangle className="h-6 w-6 mr-2" />
+                      <div className="text-lg font-semibold">Protected Land Entered</div>
+                    </div>
+                    <div className="bg-white p-5">
+                      <p className="text-sm text-gray-800 mb-3">
+                        This location intersects or is within close proximity to a protected or conservation area.
+                        Project development here is generally unsuitable and may violate environmental regulations.
+                      </p>
+                      <ul className="text-sm text-gray-700 list-disc pl-5 space-y-1 mb-3">
+                        <li>
+                          Nearest protected feature: {result.protected_features && result.protected_features[0]?.name ? result.protected_features[0]?.name : 'Protected Area'}
+                          {typeof result.protected_nearby_km === 'number' ? ` (~${result.protected_nearby_km.toFixed(2)} km)` : ''}
+                        </li>
+                        <li>Permitting is likely restricted or not allowed.</li>
+                        <li>Consider alternative sites outside protected boundaries.</li>
+                      </ul>
+                      <div className="text-xs text-gray-500">
+                        Data source: OpenStreetMap/Overpass. Screening only. Verify with official datasets and EIA.
+                      </div>
+                      <div className="mt-4 flex items-center justify-end space-x-2">
+                        <button
+                          type="button"
+                          className="px-3 py-2 text-sm rounded-md border border-gray-300 text-gray-700 bg-white hover:bg-gray-50"
+                          onClick={() => setShowProtectedDisclaimer(false)}
+                        >
+                          Dismiss
+                        </button>
+                        <button
+                          type="button"
+                          className="px-3 py-2 text-sm rounded-md bg-red-600 text-white hover:bg-red-700"
+                          onClick={() => setShowProtectedDisclaimer(false)}
+                        >
+                          Choose Different Location
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Development Restriction Disclaimer */}
+              {result.protected_overlap && (
+                <div className="rounded-md border border-red-300 bg-white p-4">
+                  <div className="text-red-700 font-semibold mb-1">Disclaimer: Location Unsuitable for Development</div>
+                  <p className="text-sm text-red-700 mb-2">
+                    Based on detected conservation and protected-area boundaries, this site should not be used for project
+                    development. Proceeding may violate environmental regulations and result in legal, permitting, or
+                    compliance issues.
+                  </p>
+                  <div className="text-sm text-red-800 font-medium mb-1">Why this site is unsuitable:</div>
+                  <ul className="text-sm text-red-700 list-disc pl-5 space-y-1">
+                    <li>Overlaps or lies within proximity of a protected area (≈ {result.protected_nearby_km?.toFixed(2) ?? 'N/A'} km).</li>
+                    {result.protected_features && result.protected_features.slice(0, 3).map((f, idx) => (
+                      <li key={idx}>
+                        {f.name || 'Protected Area'}{typeof f.distance_km === 'number' ? ` at ~${f.distance_km.toFixed(2)} km` : ''}
+                      </li>
+                    ))}
+                    <li>Activities are typically restricted; special permits and mitigation would be required.</li>
+                  </ul>
+                  <div className="text-xs text-gray-600 mt-3">
+                    Note: This screening uses public OpenStreetMap data via Overpass and is indicative only. Always verify
+                    boundaries with official datasets and conduct a full Environmental Impact Assessment (EIA).
+                  </div>
+                </div>
+              )}
               {/* Overall Score */}
               <div className="bg-gray-50 rounded-lg p-4">
                 <div className="flex items-center justify-between mb-2">
@@ -419,7 +570,9 @@ export function SiteAnalysis() {
                     Risks
                   </h3>
                   <ul className="space-y-1">
-                    {result.risks.map((risk, index) => (
+                    {[...result.risks, ...(result.protected_overlap ? [
+                      'Proximity to protected land may restrict development and extend permitting timelines.'
+                    ] : [])].map((risk, index) => (
                       <li key={index} className="text-sm text-gray-600 flex items-start">
                         <span className="text-red-500 mr-2">•</span>
                         {risk}
