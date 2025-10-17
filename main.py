@@ -505,8 +505,9 @@ async def analyze_site(request: SiteAnalysisRequest):
         from demo import SiteAnalysisRequest as DemoRequest
         
         demo_request = DemoRequest(
-            # New Pydantic v2 API
+            #location=request.location.dict(),
             location=request.location.model_dump(),
+
             project_type=request.project_type,
             analysis_depth=request.analysis_depth
         )
@@ -527,12 +528,7 @@ async def analyze_site(request: SiteAnalysisRequest):
                 "recommendations": result.recommendations,
                 "risks": result.risks,
                 "estimated_capacity_mw": result.estimated_capacity_mw,
-                "analysis_timestamp": result.analysis_timestamp.isoformat(),
-                # Protected area flags from demo
-                "protected_overlap": getattr(result, "protected_overlap", False),
-                "protected_nearby_km": getattr(result, "protected_nearby_km", None),
-                "protected_features": getattr(result, "protected_features", []),
-                "suitability": getattr(result, "suitability", "suitable"),
+                "analysis_timestamp": result.analysis_timestamp.isoformat()
             }
         }
     except Exception as e:
