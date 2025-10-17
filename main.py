@@ -505,7 +505,8 @@ async def analyze_site(request: SiteAnalysisRequest):
         from demo import SiteAnalysisRequest as DemoRequest
         
         demo_request = DemoRequest(
-            location=request.location.dict(),
+            # New Pydantic v2 API
+            location=request.location.model_dump(),
             project_type=request.project_type,
             analysis_depth=request.analysis_depth
         )

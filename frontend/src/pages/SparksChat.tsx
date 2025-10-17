@@ -3,7 +3,7 @@ import { Send, Loader2, Zap, Search, CornerDownLeft, Trash2 } from 'lucide-react
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import solar from '../assets/solar.jpg';
-import wind from '../assets/wind.jpg';
+import wind from '../assets/wind.jpg'; 
 import hydro from '../assets/hydro.jpg';
 import StripePaymentModal from '../components/StripePaymentModal';
 
