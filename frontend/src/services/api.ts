@@ -38,12 +38,10 @@ api.interceptors.response.use(
 
 // API endpoints
 export const apiEndpoints = {
- 
   authenticate: (credentials: { username: string; password: string }) =>
     api.post('/authenticate', credentials),
   register: (data: { username: string; email: string; password: string }) =>
     api.post('/register', data),
-
 
   // Site Analysis
   analyzeSite: (data: any) =>
@@ -76,4 +74,18 @@ export const apiEndpoints = {
   // Agent chat
   agentChat: (data: { message: string; city?: string; resource_type?: string }) =>
     api.post('/agent-chat', data),
+
+  // Comprehensive Report
+  comprehensiveReport: (data: {
+    project_name: string;
+    location: { latitude: number; longitude: number };
+    resource_type: string;
+    capacity_mw: number;
+    developer: string;
+    country: string;
+    report_type: string;
+    estimated_cost: number;
+    timeline_months: number;
+  }) =>
+    api.post('/comprehensive-report', data),
 }
