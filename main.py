@@ -578,53 +578,185 @@ async def search_data(request: DataSearchRequest):
 
 @app.post("/api/v1/resource-estimation")
 async def estimate_resources(request: ResourceEstimationRequest):
-    """Simplified resource estimation for demo (solar/wind/hybrid)."""
-    rt = request.resource_type
-    if rt == "solar":
-        estimation = {
-            "resource_type": "solar",
-            "annual_generation_gwh": 200.0,
-            "capacity_factor": 0.22,
-            "peak_power_mw": 100.0,
-            "seasonal_variation": {"summer": 1.2, "winter": 0.8, "spring": 1.0, "fall": 0.9},
-            "uncertainty_range": [180.0, 220.0],
-            "confidence_level": 0.85,
-            "data_quality_score": 0.9,
-        }
-    elif rt == "wind":
-        estimation = {
-            "resource_type": "wind",
-            "annual_generation_gwh": 150.0,
-            "capacity_factor": 0.35,
-            "peak_power_mw": 50.0,
-            "seasonal_variation": {"summer": 0.9, "winter": 1.3, "spring": 1.1, "fall": 1.0},
-            "uncertainty_range": [130.0, 170.0],
-            "confidence_level": 0.80,
-            "data_quality_score": 0.85,
-        }
-    elif rt == "hybrid":
-        solar = {"annual_generation_gwh": 200.0, "capacity_factor": 0.22, "peak_power_mw": 100.0,
-                 "seasonal_variation": {"summer": 1.2, "winter": 0.8, "spring": 1.0, "fall": 0.9},
-                 "uncertainty_range": [180.0, 220.0], "confidence_level": 0.85, "data_quality_score": 0.9}
-        wind = {"annual_generation_gwh": 150.0, "capacity_factor": 0.35, "peak_power_mw": 50.0,
-                "seasonal_variation": {"summer": 0.9, "winter": 1.3, "spring": 1.1, "fall": 1.0},
-                "uncertainty_range": [130.0, 170.0], "confidence_level": 0.80, "data_quality_score": 0.85}
-        peak_power_mw = solar["peak_power_mw"] + wind["peak_power_mw"]
-        capacity_factor = (solar["capacity_factor"] * solar["peak_power_mw"] + wind["capacity_factor"] * wind["peak_power_mw"]) / peak_power_mw
-        estimation = {
-            "resource_type": "hybrid",
-            "annual_generation_gwh": solar["annual_generation_gwh"] + wind["annual_generation_gwh"],
-            "capacity_factor": capacity_factor,
-            "peak_power_mw": peak_power_mw,
-            "seasonal_variation": {k: (solar["seasonal_variation"][k] + wind["seasonal_variation"][k]) / 2 for k in ["summer", "winter", "spring", "fall"]},
-            "uncertainty_range": [solar["uncertainty_range"][0] + wind["uncertainty_range"][0], solar["uncertainty_range"][1] + wind["uncertainty_range"][1]],
-            "confidence_level": min(solar["confidence_level"], wind["confidence_level"]),
-            "data_quality_score": (solar["data_quality_score"] + wind["data_quality_score"]) / 2,
-        }
-    else:
-        raise HTTPException(status_code=400, detail=f"Unsupported resource type: {rt}")
+    """Resource estimation using real NASA POWER and Open-Meteo APIs via ResourceEstimationAgent."""
+    try:
+        # Import the real agents
+        from app.agents.communication import AgentCommunicationManager
+        from app.agents.resource_estimation import ResourceEstimationAgent
+        from app.agents.site_selection import SiteSelectionAgent
+        
+        # Initialize communication manager and agents
+        comm_manager = AgentCommunicationManager()
+        site_agent = SiteSelectionAgent(comm_manager)
+        resource_agent = ResourceEstimationAgent(comm_manager)
+        
+        # Get location data
+        lat = request.location.latitude
+        lon = request.location.longitude
+        rt = request.resource_type
+        
+        # Get system configuration (use area from request or default to 100 km²)
+        area_km2 = request.system_config.get("area_km2", 100)
+        
+        # First, get site analysis for capacity estimates unless peak provided
+        site_data = None
+        provided_peak = request.system_config.get("peak_power_mw") if request.system_config else None
+        if provided_peak is None:
+            site_data = await site_agent.analyze_location({
+                "latitude": lat,
+                "longitude": lon,
+                "area_km2": area_km2,
+                "project_type": rt
+            })
+        
+        # Helper: convert monthly variation (month_1..month_12) to seasonal factors expected by UI
+        def monthly_to_seasonal(monthly: Dict[str, float], lat_for_hemi: float) -> Dict[str, float]:
+            # Build month index -> value map
+            month_vals = {}
+            for k, v in (monthly or {}).items():
+                if isinstance(k, str) and k.startswith("month_"):
+                    try:
+                        m = int(k.split("_")[1])
+                        month_vals[m] = float(v)
+                    except Exception:
+                        continue
+            # If already in seasonal form, just return
+            if any(k in monthly for k in ("spring","summer","fall","winter")):
+                return {s: float(monthly.get(s, 1.0)) for s in ("spring","summer","fall","winter")}
+            if not month_vals:
+                return {"spring": 1.0, "summer": 1.0, "fall": 1.0, "winter": 1.0}
+            # Hemisphere-aware season mapping
+            north = lat_for_hemi >= 0
+            if north:
+                seasons = {
+                    "spring": [3,4,5],
+                    "summer": [6,7,8],
+                    "fall":   [9,10,11],
+                    "winter": [12,1,2],
+                }
+            else:
+                # Southern hemisphere swaps
+                seasons = {
+                    "spring": [9,10,11],
+                    "summer": [12,1,2],
+                    "fall":   [3,4,5],
+                    "winter": [6,7,8],
+                }
+            # Compute means
+            all_vals = [v for m,v in month_vals.items()]
+            overall = sum(all_vals)/len(all_vals) if all_vals else 0.0
+            if overall <= 0:
+                return {"spring": 1.0, "summer": 1.0, "fall": 1.0, "winter": 1.0}
+            out = {}
+            for name, months in seasons.items():
+                vals = [month_vals[m] for m in months if m in month_vals]
+                mean_v = (sum(vals)/len(vals)) if vals else overall
+                out[name] = max(0.1, min(2.0, mean_v/overall))  # clamp to reasonable range
+            return out
 
-    return {"success": True, "estimation": estimation, "message": f"{rt.title()} resource estimation completed"}
+        # Prepare system config based on project type
+        if rt == "solar":
+            # Use estimated capacity from site analysis
+            system_config = {
+                "peak_power_mw": float(provided_peak if provided_peak is not None else site_data.estimated_capacity_mw),
+                "panel_efficiency": 0.22,
+                "area_km2": area_km2
+            }
+            # Call resource estimation agent
+            resource_estimate = await resource_agent.estimate_solar_resource(
+                location_data={"latitude": lat, "longitude": lon},
+                system_config=system_config
+            )
+            seasonal = monthly_to_seasonal(resource_estimate.seasonal_variation, lat)
+            
+        elif rt == "wind":
+            system_config = {
+                "peak_power_mw": float(provided_peak if provided_peak is not None else site_data.estimated_capacity_mw),
+                "turbine_rating_mw": 3.0,  # Modern 3MW turbines
+                "hub_height_m": 100,
+                "area_km2": area_km2
+            }
+            resource_estimate = await resource_agent.estimate_wind_resource(
+                location_data={"latitude": lat, "longitude": lon},
+                system_config=system_config
+            )
+            seasonal = monthly_to_seasonal(resource_estimate.seasonal_variation, lat)
+            
+        elif rt == "hybrid":
+            # For hybrid, estimate both solar and wind
+            total_peak = float(provided_peak if provided_peak is not None else site_data.estimated_capacity_mw)
+            solar_capacity = total_peak * 0.6  # 60% solar
+            wind_capacity = total_peak * 0.4   # 40% wind
+            
+            solar_config = {
+                "peak_power_mw": solar_capacity,
+                "panel_efficiency": 0.22,
+                "area_km2": area_km2 * 0.6
+            }
+            wind_config = {
+                "peak_power_mw": wind_capacity,
+                "turbine_rating_mw": 3.0,
+                "hub_height_m": 100,
+                "area_km2": area_km2 * 0.4
+            }
+            
+            solar_estimate = await resource_agent.estimate_solar_resource(
+                location_data={"latitude": lat, "longitude": lon},
+                system_config=solar_config
+            )
+            wind_estimate = await resource_agent.estimate_wind_resource(
+                location_data={"latitude": lat, "longitude": lon},
+                system_config=wind_config
+            )
+            solar_seasonal = monthly_to_seasonal(solar_estimate.seasonal_variation, lat)
+            wind_seasonal = monthly_to_seasonal(wind_estimate.seasonal_variation, lat)
+            
+            # Combine estimates for hybrid
+            resource_estimate = type('obj', (object,), {
+                'resource_type': 'hybrid',
+                'annual_generation_gwh': solar_estimate.annual_generation_gwh + wind_estimate.annual_generation_gwh,
+                'capacity_factor': (
+                    (solar_estimate.capacity_factor * solar_capacity + 
+                     wind_estimate.capacity_factor * wind_capacity) / 
+                    total_peak
+                ),
+                'peak_power_mw': total_peak,
+                'seasonal_variation': {k: (solar_seasonal.get(k,1.0)+wind_seasonal.get(k,1.0))/2 for k in ['summer','winter','spring','fall']},
+                'uncertainty_range': (
+                    solar_estimate.uncertainty_range[0] + wind_estimate.uncertainty_range[0],
+                    solar_estimate.uncertainty_range[1] + wind_estimate.uncertainty_range[1]
+                ),
+                'confidence_level': min(solar_estimate.confidence_level, wind_estimate.confidence_level),
+                'data_quality_score': (solar_estimate.data_quality_score + wind_estimate.data_quality_score) / 2
+            })()
+            seasonal = {k: float(v) for k,v in (resource_estimate.seasonal_variation or {}).items()}
+        else:
+            raise HTTPException(status_code=400, detail=f"Unsupported resource type: {rt}")
+        
+        # Convert to dictionary
+        estimation = {
+            "resource_type": resource_estimate.resource_type,
+            "annual_generation_gwh": round(resource_estimate.annual_generation_gwh, 2),
+            "capacity_factor": round(resource_estimate.capacity_factor, 3),
+            "peak_power_mw": round(resource_estimate.peak_power_mw, 2),
+            "seasonal_variation": seasonal,
+            "uncertainty_range": [
+                round(resource_estimate.uncertainty_range[0], 2),
+                round(resource_estimate.uncertainty_range[1], 2)
+            ],
+            "confidence_level": round(resource_estimate.confidence_level, 2),
+            "data_quality_score": round(resource_estimate.data_quality_score, 2),
+        }
+        
+        print(f"✅ Resource estimation using NASA POWER/Open-Meteo: {estimation['annual_generation_gwh']} GWh, CF: {estimation['capacity_factor']}")
+        
+        return {"success": True, "estimation": estimation, "message": f"{rt.title()} resource estimation completed using real NASA data"}
+    
+    except Exception as e:
+        print(f"❌ Error in resource estimation: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Resource estimation failed: {str(e)}")
 
 @app.post("/api/v1/cost-evaluation")
 async def evaluate_costs(request: CostEvaluationRequest):
@@ -827,10 +959,14 @@ async def full_analysis(request: SiteAnalysisRequest):
         site_analysis = site_resp.get("analysis", {})
 
         # --- Resource Estimation ---
+        # Pass the estimated capacity to resource estimation so peak_power_mw matches Site Analysis
         res_request = ResourceEstimationRequest(
             location=ResourceLocation(**request.location.model_dump()),  # Pydantic v2
             resource_type=request.project_type,
-            system_config={}
+            system_config={
+                "peak_power_mw": float(site_analysis.get("estimated_capacity_mw", 0) or 0),
+                "area_km2": float(request.location.area_km2)
+            }
         )
         res_resp = await estimate_resources(res_request)
         resource_estimation = res_resp.get("estimation", {})

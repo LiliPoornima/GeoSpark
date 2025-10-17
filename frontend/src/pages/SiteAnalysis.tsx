@@ -60,7 +60,7 @@ interface CitySuggestion {
   state?: string
 }
 
-export function SiteAnalysis() {
+function SiteAnalysis() {
   const [formData, setFormData] = useState({
     latitude: '',
     longitude: '',
@@ -594,3 +594,6 @@ export function SiteAnalysis() {
     </div>
   )
 }
+
+export { SiteAnalysis }
+export default SiteAnalysis
