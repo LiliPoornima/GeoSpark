@@ -4,13 +4,13 @@
 1. [Overview](#overview)
 2. [System Architecture](#system-architecture)
 3. [Features](#features)
-4. [Installation](#installation)
-5. [Usage](#usage)
-6. [API Documentation](#api-documentation)
-7. [Responsible AI](#responsible-ai)
+4. [Responsible AI](#responsible-ai)
+5. [Installation](#installation)
+6. [Usage](#usage)
+7. [Repository Structure](#repository-structure)
 8. [Commercialization](#commercialization)
-9. [Contributing](#contributing)
-10. [License](#license)
+9. [Contributors](#contributors)
+
 
 ## Overview
 
@@ -229,6 +229,67 @@ cd frontend
 npm start
 ```
 
+---
+
+## Usage
+
+Once the application is running locally, you can interact with the API endpoints or the web frontend to perform site selection, resource estimation, and cost evaluation.
+
+### Example: Site Selection API Request
+```bash
+curl -X POST http://localhost:8000/api/v1/site-selection \
+  -H "Content-Type: application/json" \
+  -d '{
+    "latitude": 7.8731,
+    "longitude": 80.7718,
+    "energy_type": "solar"
+  }'
 
 
+```
+ ## Repository Structure
+GeoSpark/
+├── main.py                  # FastAPI entry point
+├── app/
+│   ├── agents/              # AI agents (site selection, cost, resource)
+│   ├── routes/              # API endpoints
+│   ├── services/            # Core logic and AI integration
+│   ├── database/            # Database models, queries, and setup
+│   ├── security/            # JWT, AES, and input sanitization
+│   └── utils/               # Helper functions and constants
+├── scripts/
+│   └── init_db.py           # Database initialization script
+├── frontend/                # React/Next.js frontend app
+├── requirements.txt         # Python dependencies
+├── alembic/                 # Database migrations
+├── .env.example             # Environment variable template
+└── README.md                # Documentation file
 
+
+This structure ensures clear separation between backend logic, AI agents, and frontend components for maintainability and scalability.
+
+``
+## Commercialization
+
+GeoSpark can be deployed as a commercial SaaS platform for:
+
+Government renewable energy planning
+
+Private-sector site feasibility analysis
+
+Academic research and environmental modeling
+
+**Potential Revenue Streams**
+
+Subscription-based data analysis access
+
+On-demand report generation
+
+Integration with third-party GIS and energy platforms
+
+``
+## Contributors
+- Lahiruni Ariyawansha – Project Leader /Backend /Agents / Chatbot AI Systems
+- Poornima Liyanage – Backend /Agents / API connection
+- Durangi Abeykoon – Frontend / Visualization / Agents
+- Theekshana Ranasinghe– Frontend / Testing /Agents

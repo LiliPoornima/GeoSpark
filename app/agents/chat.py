@@ -1,6 +1,30 @@
 # To run this code you need to install the following dependencies:
 # pip install google-genai
 
+
+"""
+Sparks Renewable Energy Chatbot
+--------------------------------
+A conversational AI chatbot built using Google Gemini API
+for renewable energy site selection support.
+
+Features:
+- Location Analysis
+- Resource Estimation
+- Cost Evaluation
+"""
+
+def generate():
+    """
+    Starts an interactive chatbot session powered by Gemini.
+
+    - Loads API key from environment
+    - Sets up system instructions and Google Search tool
+    - Listens to user input in a loop
+    - Generates contextual responses using the Gemini API
+    """
+
+
 #Terminal code
 import os
 from google import genai
