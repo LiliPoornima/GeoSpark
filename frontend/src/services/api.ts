@@ -88,4 +88,12 @@ export const apiEndpoints = {
     timeline_months: number;
   }) =>
     api.post('/comprehensive-report', data),
+
+  // Full workflow analysis (site + resources + cost + report summary)
+  fullAnalysis: (data: {
+    location: { latitude: number; longitude: number; area_km2: number };
+    project_type: string;
+    analysis_depth?: string;
+    city_name?: string;
+  }) => api.post('/full-analysis', data),
 }
