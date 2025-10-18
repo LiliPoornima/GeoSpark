@@ -23,6 +23,8 @@ import uuid
 import bcrypt
 import random
 import math
+import geopandas as gpd
+from pathlib import Path
 
 # Import the demo functionality
 from demo import GeoSparkDemo
@@ -505,7 +507,7 @@ async def analyze_site(request: SiteAnalysisRequest):
         from demo import SiteAnalysisRequest as DemoRequest
         
         demo_request = DemoRequest(
-            location=request.location.dict(),
+            location=request.location.model_dump(),
             project_type=request.project_type,
             analysis_depth=request.analysis_depth
         )
@@ -1018,15 +1020,9 @@ async def full_analysis(request: SiteAnalysisRequest):
 
 
 
-
 @app.get("/api/v1/recent-activities")
 async def get_recent_activities():
     return {"success": True, "activities": RECENT_ACTIVITIES}
-
-
-
-
-
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
