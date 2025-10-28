@@ -6,6 +6,7 @@ import solar from '../assets/solar.jpg';
 import wind from '../assets/wind.jpg';
 import hydro from '../assets/hydro.jpg';
 import StripePaymentModal from '../components/StripePaymentModal';
+import { useAuth } from '../contexts/AuthContext';
 
 // === Type Definitions ===
 interface Source {
@@ -212,6 +213,13 @@ const MarkdownMessage: React.FC<{ content: string; isUser: boolean }> = ({ conte
  * Main Sparks Chatbot component.
  */
 const SparksChatbot: React.FC = () => {
+    // Get auth context to detect user changes
+    const { user } = useAuth();
+    
+    // Store the current user ID to detect changes
+    const [currentUserId, setCurrentUserId] = useState<string | null>(
+        localStorage.getItem('sparks_current_user_id')
+    );
     
     // Load initial messages from localStorage or use default
     const getInitialMessages = (): Message[] => {
@@ -246,7 +254,23 @@ const SparksChatbot: React.FC = () => {
     const getInitialAccess = (): boolean => {
         try {
             const savedAccess = localStorage.getItem('sparks_has_access');
-            return savedAccess === 'true';
+            const savedPremiumUserId = localStorage.getItem('sparks_premium_user_id');
+            const storedCurrentUserId = localStorage.getItem('sparks_current_user_id');
+            
+            // Only grant access if:
+            // 1. Access is marked as true
+            // 2. The premium access belongs to the current user
+            if (savedAccess === 'true' && savedPremiumUserId && savedPremiumUserId === storedCurrentUserId) {
+                return true;
+            }
+            
+            // If there's a mismatch, clear the invalid premium access
+            if (savedAccess === 'true' && savedPremiumUserId !== storedCurrentUserId) {
+                localStorage.removeItem('sparks_has_access');
+                localStorage.removeItem('sparks_premium_user_id');
+            }
+            
+            return false;
         } catch (error) {
             return false;
         }
@@ -293,6 +317,48 @@ const SparksChatbot: React.FC = () => {
             console.error('Error saving access status:', error);
         }
     }, [hasAccess]);
+
+    // Reset chat when user changes (login/logout/switch user)
+    useEffect(() => {
+        const newUserId = user?.id || null;
+        
+        // If user changed (different ID or logged out), reset the chat
+        if (newUserId !== currentUserId) {
+            console.log('User changed - resetting AI Agent chat');
+            console.log('Previous user:', currentUserId);
+            console.log('New user:', newUserId);
+            
+            // IMPORTANT: Clear localStorage FIRST before setting states
+            // This prevents race conditions with other useEffects that save to localStorage
+            localStorage.removeItem('sparks_chat_messages');
+            localStorage.removeItem('sparks_message_count');
+            localStorage.removeItem('sparks_has_access');
+            localStorage.removeItem('sparks_premium_user_id');
+            
+            // Reset messages to initial state
+            const initialMessage = {
+                id: 'initial',
+                role: 'model' as const,
+                text: `⚡ Greetings! I'm Sparks, your expert in renewable energy. I'm here to help you navigate location analysis, resource estimation, and cost evaluation for your renewable energy site selector system. What brilliant question do you have for me today?`,
+                sources: []
+            };
+            
+            // Update all states - these will trigger the save useEffects which will write to localStorage
+            setMessages([initialMessage]);
+            setMessageCount(0);
+            setHasAccess(false);
+            
+            // Store the new user ID
+            setCurrentUserId(newUserId);
+            if (newUserId) {
+                localStorage.setItem('sparks_current_user_id', newUserId);
+            } else {
+                localStorage.removeItem('sparks_current_user_id');
+            }
+            
+            console.log('Chat reset complete - user now on FREE tier');
+        }
+    }, [user, currentUserId]);
 
     //Slideshow background logic
     useEffect(() => {
@@ -414,6 +480,11 @@ const SparksChatbot: React.FC = () => {
 
     const handlePaymentSuccess = () => {
         setHasAccess(true);
+        
+        // Store premium access with user ID to ensure it's user-specific
+        const currentUser = user?.id || 'guest';
+        localStorage.setItem('sparks_premium_user_id', currentUser);
+        
         setMessages(prev => [...prev, {
             id: crypto.randomUUID(),
             role: 'model',

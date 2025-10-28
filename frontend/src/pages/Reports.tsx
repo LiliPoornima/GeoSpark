@@ -427,25 +427,25 @@ export function Reports({ prefill }: { prefill?: ReportsPrefill }) {
       id: 'executive', 
       label: 'Executive Summary', 
       icon: FileText, 
-      description: 'C-level overview with key metrics' 
+      description: 'High-level overview with key metrics and strategic recommendations'
     },
     { 
       id: 'investor', 
       label: 'Investor Report', 
       icon: DollarSign, 
-      description: 'Investment thesis and financials' 
+      description: 'Financial analysis including NPV, IRR, payback period, and ROI'
     },
     { 
       id: 'technical', 
       label: 'Technical Report', 
       icon: Zap, 
-      description: 'Engineering specifications' 
+      description: 'Engineering specifications, performance metrics, and system design'
     },
     { 
       id: 'environmental', 
       label: 'Environmental Report', 
       icon: Globe, 
-      description: 'Sustainability impact' 
+      description: 'Sustainability impact, carbon reduction, and compliance analysis'
     }
   ]
 
@@ -493,73 +493,97 @@ export function Reports({ prefill }: { prefill?: ReportsPrefill }) {
         )}
       </div>
 
+      {/* Quick Guide */}
+      <div className="bg-blue-50 border border-blue-200 p-3 rounded-lg">
+        <div className="flex items-center space-x-2">
+          <svg className="h-4 w-4 text-blue-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd"/>
+          </svg>
+          <p className="text-xs text-blue-800">
+            <span className="font-semibold">Quick Guide:</span> Fill project details → Select report type → Generate → Download (PDF/CSV)
+          </p>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Input Form */}
         <div className="space-y-6 lg:col-span-1">
-          <div className="bg-white rounded-lg shadow p-6 space-y-4">
-            <h2 className="text-lg font-semibold flex items-center">
-              <FileText className="h-5 w-5 mr-2 text-green-600" />
-              Project Details
-            </h2>
+          <div className="bg-white rounded-lg shadow-md p-6 space-y-4">
+            <div className="border-b border-gray-200 pb-3 mb-4">
+              <h2 className="text-lg font-bold flex items-center text-gray-800">
+                <FileText className="h-5 w-5 mr-2 text-green-600" />
+                Project Details
+              </h2>
+              <p className="text-xs text-gray-600 mt-1 ml-7">Enter project information for report generation</p>
+            </div>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Project Name *</label>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Project Name *
+                <span className="text-xs font-normal text-gray-500 ml-2">(Required)</span>
+              </label>
               <input 
                 name="name" 
                 value={projectData.name} 
                 onChange={onChange} 
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-colors"
-                placeholder="Enter project name"
+                className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all hover:border-gray-400"
+                placeholder="e.g., Green Valley Solar Farm, Wind Ridge Project"
               />
             </div>
             
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Latitude</label>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Latitude</label>
                 <input 
                   type="number" 
                   step="any"
                   name="location.latitude"
                   value={projectData.location.latitude} 
                   onChange={onChange} 
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-colors"
+                  className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all hover:border-gray-400"
+                  placeholder="e.g., 7.29"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Longitude</label>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Longitude</label>
                 <input 
                   type="number" 
                   step="any"
                   name="location.longitude"
                   value={projectData.location.longitude} 
                   onChange={onChange} 
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-colors"
+                  className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all hover:border-gray-400"
+                  placeholder="e.g., 80.63"
                 />
               </div>
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Capacity (MW) *</label>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Capacity (MW) *
+                <span className="text-xs font-normal text-gray-500 ml-2">(Required)</span>
+              </label>
               <input 
                 type="number"
                 name="capacity_mw"
                 value={projectData.capacity_mw} 
                 onChange={onChange} 
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-colors"
+                className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all hover:border-gray-400"
                 min="1"
+                placeholder="e.g., 50, 100, 250"
               />
             </div>
             
             {/* Fixed Resource Type Dropdown */}
             <div className="relative resource-dropdown">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Resource Type</label>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Resource Type</label>
               <button
                 type="button"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-colors bg-white text-gray-900 text-left flex justify-between items-center hover:border-green-300"
+                className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all bg-white text-gray-900 text-left flex justify-between items-center hover:border-gray-400"
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
               >
-                <span className="capitalize">{projectData.resource_type}</span>
-                <ChevronDown className={`h-4 w-4 text-gray-500 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
+                <span className="capitalize font-medium">{projectData.resource_type}</span>
+                <ChevronDown className={`h-5 w-5 text-gray-500 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
               </button>
               
               {isDropdownOpen && (
@@ -591,99 +615,142 @@ export function Reports({ prefill }: { prefill?: ReportsPrefill }) {
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Developer</label>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Developer
+                <span className="text-xs font-normal text-gray-500 ml-2">(Optional)</span>
+              </label>
               <input 
                 name="developer" 
                 value={projectData.developer} 
                 onChange={onChange} 
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-colors"
-                placeholder="Enter developer name"
+                className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all hover:border-gray-400"
+                placeholder="e.g., ABC Energy Solutions, XYZ Renewables Inc."
               />
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Country *</label>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Country *
+                <span className="text-xs font-normal text-gray-500 ml-2">(Required)</span>
+              </label>
               <input 
                 name="country" 
                 value={projectData.country} 
                 onChange={onChange} 
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-colors"
-                placeholder="Enter country"
+                className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all hover:border-gray-400"
+                placeholder="e.g., Sri Lanka, India, USA"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Est. Cost ($)</label>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Est. Cost ($)</label>
                 <input 
                   type="number"
                   name="estimated_cost"
                   value={projectData.estimated_cost} 
                   onChange={onChange} 
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-colors"
+                  className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all hover:border-gray-400"
+                  placeholder="e.g., 50000000"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Timeline (months)</label>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Timeline (months)</label>
                 <input 
                   type="number"
                   name="timeline_months"
                   value={projectData.timeline_months} 
                   onChange={onChange} 
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-colors"
+                  className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all hover:border-gray-400"
+                  placeholder="e.g., 12, 24, 36"
                 />
               </div>
             </div>
           </div>
 
           {/* Report Type Selection */}
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-lg font-semibold mb-4 flex items-center">
-              <BarChart3 className="h-5 w-5 mr-2 text-green-600" />
-              Report Type
-            </h2>
-            <div className="grid grid-cols-2 gap-3">
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <div className="border-b border-gray-200 pb-3 mb-5">
+              <h2 className="text-lg font-bold flex items-center text-gray-800">
+                <BarChart3 className="h-5 w-5 mr-2 text-green-600" />
+                Select Report Type
+              </h2>
+              <p className="text-xs text-gray-600 mt-1 ml-7">Choose the type of report you want to generate</p>
+            </div>
+            <div className="space-y-3">
               {reportTypes.map((type) => (
                 <button
                   key={type.id}
                   onClick={() => setReportType(type.id)}
-                  className={`p-3 border-2 rounded-lg text-left transition-all duration-200 flex items-start space-x-3 min-h-[80px] ${
+                  className={`w-full group p-4 border-2 rounded-lg text-left transition-all duration-200 ${
                     reportType === type.id 
-                      ? 'border-green-500 bg-green-50 text-green-700 shadow-md' 
-                      : 'border-gray-200 hover:border-green-300 hover:bg-gray-50 hover:shadow-sm'
+                      ? 'border-green-500 bg-green-50 shadow-md' 
+                      : 'border-gray-200 hover:border-green-300 hover:bg-gray-50'
                   }`}
                 >
-                  <div className={`p-2 rounded-lg ${
-                    reportType === type.id ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-600'
-                  }`}>
-                    <type.icon className="h-5 w-5" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="font-medium text-sm mb-1">{type.label}</div>
-                    <div className="text-xs text-gray-500 leading-tight">{type.description}</div>
+                  <div className="flex items-center space-x-3">
+                    <div className={`flex-shrink-0 p-2.5 rounded-lg transition-all ${
+                      reportType === type.id 
+                        ? 'bg-green-600 text-white' 
+                        : 'bg-gray-100 text-gray-600 group-hover:bg-green-100 group-hover:text-green-600'
+                    }`}>
+                      <type.icon className="h-5 w-5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className={`font-bold text-sm mb-0.5 ${
+                        reportType === type.id ? 'text-green-700' : 'text-gray-800'
+                      }`}>
+                        {type.label}
+                      </div>
+                      <div className="text-xs text-gray-600">
+                        {type.description}
+                      </div>
+                    </div>
+                    {reportType === type.id && (
+                      <div className="flex-shrink-0">
+                        <span className="w-6 h-6 bg-green-600 rounded-full flex items-center justify-center">
+                          <svg className="w-3.5 h-3.5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/>
+                          </svg>
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </button>
               ))}
             </div>
           </div>
 
-          <button 
-            onClick={onGenerate} 
-            disabled={isLoading}
-            className="w-full bg-green-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-green-700 disabled:opacity-50 flex items-center justify-center transition-colors shadow-md hover:shadow-lg"
-          >
-            {isLoading ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                Generating Report...
-              </>
-            ) : (
-              <>
-                <FileText className="h-5 w-5 mr-2" />
-                Generate {reportType.charAt(0).toUpperCase() + reportType.slice(1)} Report
-              </>
+          <div className="space-y-2">
+            {(!projectData.name || !projectData.country || !projectData.capacity_mw) && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start space-x-2">
+                <svg className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd"/>
+                </svg>
+                <p className="text-xs text-amber-800 leading-relaxed">
+                  <span className="font-semibold">Required fields missing:</span> Please fill in Project Name, Country, and Capacity to generate a report.
+                </p>
+              </div>
             )}
-          </button>
+            
+            <button 
+              onClick={onGenerate} 
+              disabled={isLoading}
+              className="w-full bg-green-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-all shadow-md hover:shadow-lg"
+            >
+              {isLoading ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Generating Report...
+                </>
+              ) : (
+                <>
+                  <FileText className="h-5 w-5 mr-2" />
+                  Generate {reportType.charAt(0).toUpperCase() + reportType.slice(1)} Report
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
         {/* Report Output */}
