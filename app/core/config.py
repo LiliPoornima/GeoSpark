@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     # API Keys
     OPENAI_API_KEY: Optional[str] = None
     ANTHROPIC_API_KEY: Optional[str] = None
+    GEMINI_API_KEY: Optional[str] = None
     
     # Redis
     REDIS_URL: Optional[str] = None

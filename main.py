@@ -11,6 +11,7 @@ RECENT_ACTIVITIES: list[dict] = []
 
 
 import uvicorn
+import logging
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -23,6 +24,8 @@ import uuid
 import bcrypt
 import random
 import math
+
+logger = logging.getLogger(__name__)
 
 # Import the demo functionality
 from demo import GeoSparkDemo
@@ -828,20 +831,25 @@ async def agent_chat(req: AgentChatRequest):
 
     # If user forces chat mode, answer directly
     if (req.mode or "").lower() == "chat":
-        from app.services.llm_service import LLMProvider, LLMRequest, llm_manager, TaskType
-        content = (
-            f"User asked: {req.message}."
-        )
-        response = await llm_manager.process_request(LLMRequest(
-            task_type=TaskType.NATURAL_LANGUAGE_QUERY,
-            prompt=content,
-            context={"city": req.city, "resource_type": resource_type},
-            provider=LLMProvider.GEMINI,
-            model="gemini-1.5-flash",
-            max_tokens=800,
-            temperature=0.5
-        ))
-        return {"success": True, "mode": "chat", "message": response.content}
+        try:
+            from app.services.llm_service import LLMProvider, LLMRequest, llm_manager, TaskType
+            content = (
+                f"User asked: {req.message}."
+            )
+            response = await llm_manager.process_request(LLMRequest(
+                task_type=TaskType.NATURAL_LANGUAGE_QUERY,
+                prompt=content,
+                context={"city": req.city, "resource_type": resource_type},
+                provider=LLMProvider.GEMINI,
+                model="gemini-2.0-flash-exp",
+                max_tokens=800,
+                temperature=0.5
+            ))
+            return {"success": True, "mode": "chat", "message": response.content}
+        except Exception as e:
+            logger.error(f"Chat error: {e}")
+            # Fallback to rule-based response
+            return {"success": True, "mode": "chat", "message": f"I can help you analyze renewable energy projects! You asked: '{req.message}'. To get detailed analysis, please provide a city name and I'll run a full analysis including site selection, resource estimation, and cost evaluation."}
 
     # If we have coordinates, run the full workflow
     results: Dict[str, Any] = {}

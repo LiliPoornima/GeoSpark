@@ -70,12 +70,9 @@ class LLMManager:
         if settings.ANTHROPIC_API_KEY:
             self.anthropic_client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
         
-        if settings.WEATHER_API_KEY or settings.OPENAI_API_KEY or settings.ANTHROPIC_API_KEY:
-            pass
-
-        if os.getenv("GEMINI_API_KEY"):
+        if settings.GEMINI_API_KEY:
             try:
-                genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+                genai.configure(api_key=settings.GEMINI_API_KEY)
                 self.gemini_client = True
             except Exception:
                 self.gemini_client = None

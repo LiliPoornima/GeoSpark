@@ -306,7 +306,7 @@ const SparksChatbot: React.FC = () => {
     }, []);
 
     /**
-     * Handles sending the message to the Gemini API.
+     * Handles sending the message through the backend API.
      */
     const handleSend = async () => {
         const messageText = input.trim();
@@ -326,73 +326,53 @@ const SparksChatbot: React.FC = () => {
         const newUserMessageId = crypto.randomUUID();
         const loadingMessageId = crypto.randomUUID();
 
-        // 1. Prepare chat history for the API call (use the current `messages` state snapshot)
-        // Ensure we only use non-system, non-loading messages for the contents history.
-        const chatHistory = messages
-            .filter(m => !m.isLoading && m.role !== 'system')
-            .map(m => ({
-                role: m.role,
-                parts: [{ text: m.text }],
-            }));
-        
-        // 2. Add current user message to the contents payload
-        const contents = [...chatHistory, { role: 'user', parts: [{ text: messageText }] }];
-
-        // 3. Update UI state with the new user message and the temporary loading message
-        // This is done *before* the fetch to provide immediate UI feedback.
+        // Update UI state with the new user message and the temporary loading message
         setMessages(prev => [
             ...prev, 
             { id: newUserMessageId, role: 'user', text: messageText },
             { id: loadingMessageId, role: 'model', text: '', isLoading: true }
         ]);
         
-        // 4. Construct API payload 
-        const payload = {
-            contents: contents, // Use the correctly formatted history + new query
-            tools: [{ "google_search": {} }], 
-            systemInstruction: {
-                parts: [{ text: systemPrompt }]
-            },
-        };
-
-        const apiUrl = `${API_URL_BASE}?key=${apiKey}`;
-
+        // Call the backend agent-chat endpoint
         try {
-            const response = await fetchWithExponentialBackoff(apiUrl, {
+            const response = await fetch('/api/v1/agent-chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+                body: JSON.stringify({
+                    message: messageText,
+                    mode: 'chat'
+                })
             });
 
-            const result = await response.json();
-            const { text: modelResponseText, sources } = parseGeminiResponse(result);
+            if (!response.ok) {
+                throw new Error(`API request failed with status: ${response.status}`);
+            }
 
-            // 5. Update state with the final model response
+            const result = await response.json();
+            const modelResponseText = result.message || "I couldn't generate a response. Please try again.";
+
+            // Update state with the final model response
             setMessages(prev => {
-                // Find and replace the loading message using the known ID
                 return prev.map(m => 
                     m.id === loadingMessageId ? { 
                         ...m, 
                         text: modelResponseText, 
-                        sources: sources, 
+                        sources: [], 
                         isLoading: false 
                     } : m
                 );
             });
 
         } catch (error) {
-            // New logic: Extract specific error message for better visibility
             const errorMessage = error instanceof Error ? error.message : "An unknown API error occurred.";
-            console.error("Gemini API Error:", errorMessage);
+            console.error("Chat API Error:", errorMessage);
             
-            // 6. Replace loading message with a detailed error message
+            // Replace loading message with a detailed error message
             setMessages(prev => {
-                // Find and replace the loading message using the known ID
                 return prev.map(m => 
                     m.id === loadingMessageId ? { 
                         ...m, 
-                        // Provide the captured error message to the user
-                        text: `Oops! I encountered an error. The request failed: ${errorMessage}. Please try again or rephrase your question.`, 
+                        text: `I'm having trouble connecting. The request failed: ${errorMessage}. Please try again.`, 
                         isLoading: false 
                     } : m
                 );
