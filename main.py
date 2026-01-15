@@ -596,13 +596,18 @@ async def estimate_resources(request: ResourceEstimationRequest):
         # First, get site analysis for capacity estimates unless peak provided
         site_data = None
         provided_peak = request.system_config.get("peak_power_mw") if request.system_config else None
+        
+        # Always get site data for capacity estimates
+        site_data = await site_agent.analyze_location({
+            "latitude": lat,
+            "longitude": lon,
+            "area_km2": area_km2,
+            "project_type": rt
+        })
+        
+        # Use provided peak or estimated capacity
         if provided_peak is None:
-            site_data = await site_agent.analyze_location({
-                "latitude": lat,
-                "longitude": lon,
-                "area_km2": area_km2,
-                "project_type": rt
-            })
+            provided_peak = site_data.estimated_capacity_mw
         
         # Helper: convert monthly variation (month_1..month_12) to seasonal factors expected by UI
         def monthly_to_seasonal(monthly: Dict[str, float], lat_for_hemi: float) -> Dict[str, float]:
@@ -653,7 +658,7 @@ async def estimate_resources(request: ResourceEstimationRequest):
         if rt == "solar":
             # Use estimated capacity from site analysis
             system_config = {
-                "peak_power_mw": float(provided_peak if provided_peak is not None else site_data.estimated_capacity_mw),
+                "peak_power_mw": float(provided_peak),
                 "panel_efficiency": 0.22,
                 "area_km2": area_km2
             }
@@ -666,7 +671,7 @@ async def estimate_resources(request: ResourceEstimationRequest):
             
         elif rt == "wind":
             system_config = {
-                "peak_power_mw": float(provided_peak if provided_peak is not None else site_data.estimated_capacity_mw),
+                "peak_power_mw": float(provided_peak),
                 "turbine_rating_mw": 3.0,  # Modern 3MW turbines
                 "hub_height_m": 100,
                 "area_km2": area_km2
@@ -679,7 +684,7 @@ async def estimate_resources(request: ResourceEstimationRequest):
             
         elif rt == "hybrid":
             # For hybrid, estimate both solar and wind
-            total_peak = float(provided_peak if provided_peak is not None else site_data.estimated_capacity_mw)
+            total_peak = float(provided_peak)
             solar_capacity = total_peak * 0.6  # 60% solar
             wind_capacity = total_peak * 0.4   # 40% wind
             
