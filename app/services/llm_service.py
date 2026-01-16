@@ -100,7 +100,12 @@ class LLMManager:
         if not self.gemini_client:
             raise ValueError("Gemini client not initialized")
         try:
-            model = genai.GenerativeModel(request.model or "gemini-1.5-flash")
+            # Use the full model name format (models/xxx) if not already provided
+            model_name = request.model or "models/gemini-2.5-flash"
+            if not model_name.startswith("models/"):
+                model_name = f"models/{model_name}"
+            
+            model = genai.GenerativeModel(model_name)
             prompt_parts = [self._get_system_prompt(request.task_type)]
             if request.context:
                 prompt_parts.append("Context:\n" + json.dumps(request.context, indent=2))
@@ -111,7 +116,7 @@ class LLMManager:
             return LLMResponse(
                 content=content,
                 usage=usage,
-                model=request.model or "gemini-1.5-flash",
+                model=model_name,
                 provider=LLMProvider.GEMINI,
                 timestamp=datetime.utcnow()
             )

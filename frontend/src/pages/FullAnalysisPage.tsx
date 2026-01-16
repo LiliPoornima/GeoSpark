@@ -47,9 +47,9 @@ export default function FullAnalysisPage() {
   const [selectedCity, setSelectedCity] = useState<CitySuggestion | null>(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
-  const [latitude, setLatitude] = useState<number>(7.29);
-  const [longitude, setLongitude] = useState<number>(80.63);
-  const [areaKm2, setAreaKm2] = useState<number>(100);
+  const [latitude, setLatitude] = useState<number | ''>('');
+  const [longitude, setLongitude] = useState<number | ''>('');
+  const [areaKm2, setAreaKm2] = useState<number | ''>('');
   const [projectType, setProjectType] = useState<ProjectType>("solar");
 
   const [isLoading, setIsLoading] = useState(false);
@@ -137,12 +137,18 @@ export default function FullAnalysisPage() {
 
   // --- Full Analysis ---
   const runFullAnalysis = async () => {
+    // Validation
+    if (!latitude || !longitude || !areaKm2) {
+      toast.error("Please fill in latitude, longitude, and area");
+      return;
+    }
+
     setIsLoading(true);
     setWorkflow(null);
     try {
       // Always call backend via centralized API client (proxied by Vite to 8000)
       const r = await apiEndpoints.fullAnalysis({
-        location: { latitude, longitude, area_km2: areaKm2 },
+        location: { latitude: Number(latitude), longitude: Number(longitude), area_km2: Number(areaKm2) },
         project_type: projectType,
         analysis_depth: "comprehensive",
         city_name: selectedCity?.name || "",
@@ -237,15 +243,33 @@ export default function FullAnalysisPage() {
 
         <div>
           <label className="block text-sm font-medium text-gray-700">Latitude</label>
-          <input type="number" value={latitude} onChange={(e) => setLatitude(parseFloat(e.target.value))} className="w-full border rounded p-2" />
+          <input 
+            type="number" 
+            value={latitude} 
+            onChange={(e) => setLatitude(e.target.value ? parseFloat(e.target.value) : '')} 
+            className="w-full border rounded p-2" 
+            placeholder="Enter latitude"
+          />
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700">Longitude</label>
-          <input type="number" value={longitude} onChange={(e) => setLongitude(parseFloat(e.target.value))} className="w-full border rounded p-2" />
+          <input 
+            type="number" 
+            value={longitude} 
+            onChange={(e) => setLongitude(e.target.value ? parseFloat(e.target.value) : '')} 
+            className="w-full border rounded p-2" 
+            placeholder="Enter longitude"
+          />
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700">Area (km²)</label>
-          <input type="number" value={areaKm2} onChange={(e) => setAreaKm2(parseFloat(e.target.value))} className="w-full border rounded p-2" />
+          <input 
+            type="number" 
+            value={areaKm2} 
+            onChange={(e) => setAreaKm2(e.target.value ? parseFloat(e.target.value) : '')} 
+            className="w-full border rounded p-2" 
+            placeholder="Enter area"
+          />
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700">Project Type</label>
@@ -262,7 +286,19 @@ export default function FullAnalysisPage() {
         <button onClick={runFullAnalysis} disabled={isLoading} className="bg-green-600 text-white px-4 py-2 rounded disabled:opacity-50">
           {isLoading ? "Running full analysis..." : "Run Full Analysis"}
         </button>
-        <button onClick={() => setWorkflow(null)} className="bg-gray-200 px-4 py-2 rounded">Reset</button>
+        <button 
+          onClick={() => {
+            setWorkflow(null);
+            setLatitude('');
+            setLongitude('');
+            setAreaKm2('');
+            setCitySearch('');
+            setSelectedCity(null);
+          }} 
+          className="bg-gray-200 px-4 py-2 rounded"
+        >
+          Reset
+        </button>
       </div>
 
       {/* Results */}
@@ -273,18 +309,24 @@ export default function FullAnalysisPage() {
             <div className="bg-white rounded-lg shadow p-4 lg:col-span-1">
               <h2 className="font-semibold mb-2 flex items-center"><MapIcon className="mr-2" /> Selected Site</h2>
               <div className="h-56 rounded overflow-hidden">
-                <MapContainer center={[latitude, longitude]} zoom={10} style={{ height: "100%", width: "100%" }}>
-                  <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                  <Marker position={[latitude, longitude]}>
-                    <Popup>
-                      <div className="text-sm">
-                        <div className="font-semibold">Selected site</div>
-                        <div>{latitude.toFixed(4)}, {longitude.toFixed(4)}</div>
-                        <div className="mt-1 text-xs text-gray-600">Resource: {projectType.toUpperCase()}</div>
-                      </div>
-                    </Popup>
-                  </Marker>
-                </MapContainer>
+                {latitude && longitude ? (
+                  <MapContainer center={[Number(latitude), Number(longitude)]} zoom={10} style={{ height: "100%", width: "100%" }}>
+                    <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                    <Marker position={[Number(latitude), Number(longitude)]}>
+                      <Popup>
+                        <div className="text-sm">
+                          <div className="font-semibold">Selected site</div>
+                          <div>{Number(latitude).toFixed(4)}, {Number(longitude).toFixed(4)}</div>
+                          <div className="mt-1 text-xs text-gray-600">Resource: {projectType.toUpperCase()}</div>
+                        </div>
+                      </Popup>
+                    </Marker>
+                  </MapContainer>
+                ) : (
+                  <div className="h-full flex items-center justify-center bg-gray-100 text-gray-500">
+                    Select a location to view map
+                  </div>
+                )}
               </div>
             </div>
 

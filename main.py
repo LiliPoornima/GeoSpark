@@ -854,7 +854,7 @@ async def agent_chat(req: AgentChatRequest):
                 prompt=user_query,
                 context={"city": req.city, "resource_type": resource_type, "user_message": req.message},
                 provider=LLMProvider.GEMINI,
-                model="gemini-pro",
+                model="models/gemini-2.5-flash",
                 max_tokens=1000,
                 temperature=0.7
             ))
