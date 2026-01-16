@@ -829,27 +829,39 @@ async def agent_chat(req: AgentChatRequest):
         except Exception:
             pass
 
-    # If user forces chat mode, answer directly
+    # If user forces chat mode, answer directly with Gemini AI
     if (req.mode or "").lower() == "chat":
         try:
             from app.services.llm_service import LLMProvider, LLMRequest, llm_manager, TaskType
-            content = (
-                f"User asked: {req.message}."
+            from app.core.config import settings
+            
+            # Check if API key is available
+            if not settings.GEMINI_API_KEY:
+                return {"success": False, "mode": "chat", "message": "⚠️ Gemini API key is not configured. Please add your GEMINI_API_KEY to the .env file to enable AI-powered chat responses."}
+            
+            # Enhanced prompt for better conversational AI
+            system_context = (
+                "You are Sparks, an expert AI assistant for GeoSpark - a renewable energy analysis platform. "
+                "You help users with site selection, resource estimation, and cost evaluation for solar, wind, and hydro projects. "
+                "Be conversational, helpful, and enthusiastic about renewable energy. "
+                "When users mention wanting to build a project, ask them about their location and project type to provide detailed analysis."
             )
+            
+            user_query = f"{system_context}\n\nUser question: {req.message}"
+            
             response = await llm_manager.process_request(LLMRequest(
                 task_type=TaskType.NATURAL_LANGUAGE_QUERY,
-                prompt=content,
-                context={"city": req.city, "resource_type": resource_type},
+                prompt=user_query,
+                context={"city": req.city, "resource_type": resource_type, "user_message": req.message},
                 provider=LLMProvider.GEMINI,
-                model="gemini-2.0-flash-exp",
-                max_tokens=800,
-                temperature=0.5
+                model="gemini-pro",
+                max_tokens=1000,
+                temperature=0.7
             ))
             return {"success": True, "mode": "chat", "message": response.content}
         except Exception as e:
-            logger.error(f"Chat error: {e}")
-            # Fallback to rule-based response
-            return {"success": True, "mode": "chat", "message": f"I can help you analyze renewable energy projects! You asked: '{req.message}'. To get detailed analysis, please provide a city name and I'll run a full analysis including site selection, resource estimation, and cost evaluation."}
+            logger.error(f"Chat error: {e}", exc_info=True)
+            return {"success": False, "mode": "chat", "message": f"⚠️ I encountered an error while processing your request: {str(e)}. Please try again or check if the Gemini API key is valid."}
 
     # If we have coordinates, run the full workflow
     results: Dict[str, Any] = {}
