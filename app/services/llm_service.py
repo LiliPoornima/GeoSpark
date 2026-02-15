@@ -9,6 +9,7 @@ from datetime import datetime
 import json
 import openai
 import anthropic
+import google.generativeai as genai
 from dataclasses import dataclass
 from enum import Enum
 
@@ -21,6 +22,7 @@ class LLMProvider(Enum):
     """Supported LLM providers"""
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
+    GEMINI = "gemini"
 
 class TaskType(Enum):
     """Types of LLM tasks"""
@@ -58,6 +60,7 @@ class LLMManager:
     def __init__(self):
         self.openai_client = None
         self.anthropic_client = None
+        self.gemini_client = None
         self.initialized = False
         
         # Initialize clients if API keys are available
@@ -67,6 +70,16 @@ class LLMManager:
         if settings.ANTHROPIC_API_KEY:
             self.anthropic_client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
         
+        if settings.WEATHER_API_KEY or settings.OPENAI_API_KEY or settings.ANTHROPIC_API_KEY:
+            pass
+
+        if os.getenv("GEMINI_API_KEY"):
+            try:
+                genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+                self.gemini_client = True
+            except Exception:
+                self.gemini_client = None
+
         self.initialized = True
         logger.info("LLM Manager initialized")
     
@@ -77,11 +90,36 @@ class LLMManager:
                 return await self._process_openai_request(request)
             elif request.provider == LLMProvider.ANTHROPIC:
                 return await self._process_anthropic_request(request)
+            elif request.provider == LLMProvider.GEMINI:
+                return await self._process_gemini_request(request)
             else:
                 raise ValueError(f"Unsupported LLM provider: {request.provider}")
                 
         except Exception as e:
             logger.error(f"Error processing LLM request: {e}")
+            raise
+
+    async def _process_gemini_request(self, request: LLMRequest) -> LLMResponse:
+        if not self.gemini_client:
+            raise ValueError("Gemini client not initialized")
+        try:
+            model = genai.GenerativeModel(request.model or "gemini-1.5-flash")
+            prompt_parts = [self._get_system_prompt(request.task_type)]
+            if request.context:
+                prompt_parts.append("Context:\n" + json.dumps(request.context, indent=2))
+            prompt_parts.append(request.prompt)
+            response = await asyncio.to_thread(model.generate_content, "\n\n".join(prompt_parts))
+            content = response.text or ""
+            usage = {"total_tokens": 0}
+            return LLMResponse(
+                content=content,
+                usage=usage,
+                model=request.model or "gemini-1.5-flash",
+                provider=LLMProvider.GEMINI,
+                timestamp=datetime.utcnow()
+            )
+        except Exception as e:
+            logger.error(f"Gemini API error: {e}")
             raise
     
     async def _process_openai_request(self, request: LLMRequest) -> LLMResponse:
