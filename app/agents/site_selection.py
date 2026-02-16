@@ -65,10 +65,11 @@ class SiteSelectionAgent(BaseAgent):
         self.register_handler("compare_sites", self._handle_compare_sites)
         self.register_handler("get_site_recommendations", self._handle_get_recommendations)
         
-        # External API configurations
-        self.solar_api_url = "https://api.solar.com/v1/irradiance"
-        self.wind_api_url = "https://api.wind.com/v1/speed"
-        self.elevation_api_url = "https://api.elevation.com/v1/elevation"
+        # Real API configurations
+        # NASA POWER API for solar irradiance data (FREE, no API key needed)
+        self.nasa_power_api_url = "https://power.larc.nasa.gov/api/temporal/daily/point"
+        # Open-Meteo API for wind data (FREE, no API key needed)
+        self.wind_api_url = "https://api.open-meteo.com/v1/forecast"
         
     async def analyze_location(self, location_data: Dict[str, Any]) -> SiteAnalysis:
         """Analyze a specific location for renewable energy potential"""
@@ -138,87 +139,178 @@ class SiteSelectionAgent(BaseAgent):
             raise
     
     async def _analyze_solar_potential(self, lat: float, lon: float) -> Dict[str, float]:
-        """Analyze solar energy potential for a location"""
+        """Analyze solar energy potential using NASA POWER API"""
         try:
-            # In a real implementation, this would call external APIs
-            # For now, we'll use simplified calculations
+            # NASA POWER API - Free, no API key required
+            # Get last full year of data for accurate annual averages
+            params = {
+                "parameters": "ALLSKY_SFC_SW_DWN",  # Solar irradiance (kWh/m²/day)
+                "community": "RE",  # Renewable Energy community
+                "longitude": lon,
+                "latitude": lat,
+                "start": "20230101",  # Last full year
+                "end": "20231231",
+                "format": "JSON"
+            }
             
-            # Simulate API call for solar irradiance
             response = requests.get(
-                f"{self.solar_api_url}?lat={lat}&lon={lon}",
-                timeout=10
+                self.nasa_power_api_url,
+                params=params,
+                timeout=15
             )
             
             if response.status_code == 200:
                 data = response.json()
-                annual_irradiance = data.get("annual_irradiance", 4.5)
-                peak_sun_hours = data.get("peak_sun_hours", 5.2)
+                # Get annual average solar irradiance
+                irradiance_data = data.get("properties", {}).get("parameter", {}).get("ALLSKY_SFC_SW_DWN", {})
+                
+                if irradiance_data:
+                    # Calculate annual average from daily values
+                    # Filter out None/NaN and cast to float
+                    raw_values = list(irradiance_data.values())
+                    daily_values = []
+                    for v in raw_values:
+                        try:
+                            if v is None:
+                                continue
+                            f = float(v)
+                            if np.isnan(f):
+                                continue
+                            daily_values.append(f)
+                        except Exception:
+                            continue
+                    if not daily_values:
+                        raise ValueError("No valid irradiance values")
+                    annual_irradiance = float(sum(daily_values)) / float(len(daily_values))
+                    peak_sun_hours = annual_irradiance  # Peak sun hours ≈ daily kWh/m²
+                    
+                    logger.info(f"NASA POWER: Solar irradiance at ({lat}, {lon}): {annual_irradiance:.2f} kWh/m²/day")
+                else:
+                    raise ValueError("No irradiance data in response")
             else:
-                # Fallback calculation based on latitude
-                annual_irradiance = max(2.0, 6.0 - abs(lat) * 0.05)
-                peak_sun_hours = annual_irradiance * 0.8
+                logger.warning(f"NASA POWER API failed (status {response.status_code}), using fallback")
+                raise ValueError("API call failed")
             
             # Calculate solar potential metrics
-            solar_efficiency = 0.22  # Typical solar panel efficiency
-            capacity_factor = peak_sun_hours / 24.0
+            solar_efficiency = 0.22  # Typical modern solar panel efficiency (22%)
+            capacity_factor = peak_sun_hours / 24.0  # Capacity factor based on peak sun hours
             
             return {
                 "annual_irradiance_kwh_m2": annual_irradiance,
                 "peak_sun_hours": peak_sun_hours,
                 "capacity_factor": capacity_factor,
                 "solar_efficiency": solar_efficiency,
-                "solar_score": min(1.0, annual_irradiance / 6.0)
+                "solar_score": min(1.0, annual_irradiance / 6.0),
+                "data_source": "NASA_POWER"
             }
             
         except Exception as e:
-            logger.error(f"Error analyzing solar potential: {e}")
-            # Return default values
+            logger.error(f"Error fetching NASA POWER data: {e}")
+            # Fallback: Use latitude-based estimation
+            annual_irradiance = max(2.0, 6.0 - abs(lat) * 0.05)
+            peak_sun_hours = annual_irradiance * 0.8
+            
             return {
-                "annual_irradiance_kwh_m2": 4.0,
-                "peak_sun_hours": 4.5,
-                "capacity_factor": 0.19,
+                "annual_irradiance_kwh_m2": annual_irradiance,
+                "peak_sun_hours": peak_sun_hours,
+                "capacity_factor": peak_sun_hours / 24.0,
                 "solar_efficiency": 0.22,
-                "solar_score": 0.7
+                "solar_score": min(1.0, annual_irradiance / 6.0),
+                "data_source": "FALLBACK_CALCULATION"
             }
     
     async def _analyze_wind_potential(self, lat: float, lon: float) -> Dict[str, float]:
-        """Analyze wind energy potential for a location"""
+        """Analyze wind energy potential using Open-Meteo API"""
         try:
-            # Simulate API call for wind data
+            # Open-Meteo API - Free historical wind data
+            # Get wind speed at 100m height (typical wind turbine hub height)
+            params = {
+                "latitude": lat,
+                "longitude": lon,
+                "hourly": "wind_speed_100m,wind_direction_100m",
+                "past_days": 90,  # Last 90 days for seasonal average
+                "forecast_days": 0
+            }
+            
             response = requests.get(
-                f"{self.wind_api_url}?lat={lat}&lon={lon}",
-                timeout=10
+                self.wind_api_url,
+                params=params,
+                timeout=15
             )
             
             if response.status_code == 200:
                 data = response.json()
-                avg_wind_speed = data.get("average_wind_speed", 6.0)
-                wind_direction = data.get("prevailing_direction", 270)
+                hourly_data = data.get("hourly", {})
+                wind_speeds_raw = hourly_data.get("wind_speed_100m", [])
+                wind_directions_raw = hourly_data.get("wind_direction_100m", [])
+                # Sanitize lists by removing None/NaN and casting to float
+                wind_speeds = []
+                for v in wind_speeds_raw:
+                    try:
+                        if v is None:
+                            continue
+                        f = float(v)
+                        if np.isnan(f):
+                            continue
+                        wind_speeds.append(f)
+                    except Exception:
+                        continue
+                wind_directions = []
+                for v in wind_directions_raw:
+                    try:
+                        if v is None:
+                            continue
+                        f = float(v)
+                        if np.isnan(f):
+                            continue
+                        wind_directions.append(f)
+                    except Exception:
+                        continue
+                
+                if wind_speeds:
+                    # Calculate average wind speed
+                    avg_wind_speed = float(sum(wind_speeds)) / float(len(wind_speeds))
+                    
+                    # Calculate prevailing wind direction (most common direction)
+                    if wind_directions:
+                        prevailing_direction = float(sum(wind_directions)) / float(len(wind_directions))
+                    else:
+                        prevailing_direction = 270  # Default to west
+                    
+                    logger.info(f"Open-Meteo: Wind speed at ({lat}, {lon}): {avg_wind_speed:.2f} m/s at 100m")
+                else:
+                    raise ValueError("No wind data in response")
             else:
-                # Fallback calculation
-                avg_wind_speed = max(3.0, 8.0 - abs(lat) * 0.02)
-                wind_direction = 270  # West
+                logger.warning(f"Open-Meteo API failed (status {response.status_code}), using fallback")
+                raise ValueError("API call failed")
             
             # Calculate wind potential metrics
-            wind_turbine_efficiency = 0.45  # Typical wind turbine efficiency
+            wind_turbine_efficiency = 0.45  # Typical modern wind turbine efficiency (45%)
+            # Capacity factor using simplified power curve: CF ≈ (v/v_rated)³ for v < v_rated
+            # Assuming rated wind speed of 12 m/s
             capacity_factor = min(0.5, (avg_wind_speed / 12.0) ** 3)
             
             return {
                 "average_wind_speed_ms": avg_wind_speed,
-                "prevailing_direction": wind_direction,
+                "prevailing_direction": prevailing_direction,
                 "capacity_factor": capacity_factor,
                 "turbine_efficiency": wind_turbine_efficiency,
-                "wind_score": min(1.0, avg_wind_speed / 10.0)
+                "wind_score": min(1.0, avg_wind_speed / 10.0),
+                "data_source": "OPEN_METEO"
             }
             
         except Exception as e:
-            logger.error(f"Error analyzing wind potential: {e}")
+            logger.error(f"Error fetching Open-Meteo wind data: {e}")
+            # Fallback: Use latitude-based estimation
+            avg_wind_speed = max(3.0, 8.0 - abs(lat) * 0.02)
+            
             return {
-                "average_wind_speed_ms": 5.5,
+                "average_wind_speed_ms": avg_wind_speed,
                 "prevailing_direction": 270,
-                "capacity_factor": 0.25,
+                "capacity_factor": min(0.5, (avg_wind_speed / 12.0) ** 3),
                 "turbine_efficiency": 0.45,
-                "wind_score": 0.6
+                "wind_score": min(1.0, avg_wind_speed / 10.0),
+                "data_source": "FALLBACK_CALCULATION"
             }
     
     async def _assess_environmental_factors(self, lat: float, lon: float, area_km2: float) -> float:

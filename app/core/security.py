@@ -22,9 +22,16 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # JWT token handling
 security = HTTPBearer()
+# Optional bearer that won't auto-raise when missing
+optional_security = HTTPBearer(auto_error=False)
 
 # Encryption for sensitive data
-fernet = Fernet(settings.SECRET_KEY.encode()[:32].ljust(32, b'0'))
+# Ensure we always have a valid Fernet key; fall back to a generated key if provided key is invalid
+try:
+    fernet = Fernet(settings.SECRET_KEY.encode())
+except Exception:
+    logging.warning("Invalid SECRET_KEY for Fernet; generating a temporary key for demo mode.")
+    fernet = Fernet(Fernet.generate_key())
 
 class SecurityManager:
     """Centralized security management"""
@@ -159,6 +166,15 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     # In a real application, you would fetch user data from database
     # For now, return the payload
     return payload
+
+async def get_optional_user(credentials: Optional[HTTPAuthorizationCredentials] = Depends(optional_security)) -> Dict[str, Any]:
+    """Get user if Authorization header is provided; otherwise return a guest user."""
+    if credentials and credentials.credentials:
+        token = credentials.credentials
+        payload = security_manager.verify_token(token)
+        return payload
+    # Fallback guest user
+    return {"user_id": "guest", "role": "guest"}
 
 def require_permissions(required_permissions: List[str]):
     """Decorator to require specific permissions"""
