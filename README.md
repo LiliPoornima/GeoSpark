@@ -288,8 +288,3 @@ On-demand report generation
 Integration with third-party GIS and energy platforms
 
 
-## Contributors
-- Lahiruni Ariyawansha – Project Leader /Backend /Agents / Chatbot AI Systems
-- Poornima Liyanage – Backend /Agents / API connection
-- Durangi Abeykoon – Frontend / Visualization / Agents
-- Theekshana Ranasinghe– Frontend / Testing /Agents
